@@ -1,5 +1,6 @@
 #include "pch.h"
-#include "core/memory/OffsetManager.h"
+#include "config/OffsetConfig.h"
+#include "core/hooks/PresentHook.h"
 #include <thread>
 
 void MainThread(HMODULE hModule) {
@@ -10,13 +11,20 @@ void MainThread(HMODULE hModule) {
 
     printf("[Lavender] Initializing...\n"); fflush(stdout);
 
-    Offsets::Initialize();
+    if (!OffsetConfig::Load()) {
+        printf("[Lavender] Failed to load a2x offsets.\n"); fflush(stdout);
+        return;
+    }
+    printf("[Lavender] Offsets loaded.\n"); fflush(stdout);
+
+    PresentHook::Initialize();
 
     while (true) {
         if (GetAsyncKeyState(VK_END) & 1) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
+    PresentHook::Shutdown();
     fclose(f);
     FreeConsole();
     FreeLibraryAndExitThread(hModule, 0);

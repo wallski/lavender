@@ -1,12 +1,10 @@
 #pragma once
 
-#define WIN32_LEAN_AND_MEAN 
+#define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
-
 
 #include <Windows.h>
 #include <Psapi.h>
-
 
 #include <iostream>
 #include <string>
@@ -20,8 +18,10 @@
 #include <unordered_map>
 #include <algorithm>
 
-
 #include <d3d11.h>
 #include <dxgi.h>
+#include <dxgi1_2.h>
+
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
+#pragma comment(lib, "Psapi.lib")
