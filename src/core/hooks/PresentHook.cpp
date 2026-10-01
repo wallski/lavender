@@ -39,6 +39,28 @@ namespace PresentHook {
         return o_Present1(sc, si, fl, pp);
     }
 
+    static bool LooksLikeRealSwapchain(void* candidate, void** expectedVtable) {
+        __try {
+            void** vt = *reinterpret_cast<void***>(candidate);
+            if (vt != expectedVtable) return false;
+
+            uintptr_t q = reinterpret_cast<uintptr_t>(vt[0]);
+            uintptr_t ar = reinterpret_cast<uintptr_t>(vt[1]);
+            uintptr_t rl = reinterpret_cast<uintptr_t>(vt[2]);
+            uintptr_t pr = reinterpret_cast<uintptr_t>(vt[8]);
+
+            if (q < 0x10000 || q  > 0x00007FFFFFFFFFFF) return false;
+            if (ar < 0x10000 || ar > 0x00007FFFFFFFFFFF) return false;
+            if (rl < 0x10000 || rl > 0x00007FFFFFFFFFFF) return false;
+            if (pr < 0x10000 || pr > 0x00007FFFFFFFFFFF) return false;
+
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
     static std::vector<IDXGISwapChain*> FindAllByVtable(void** vtable) {
         std::vector<IDXGISwapChain*> results;
 
@@ -47,30 +69,52 @@ namespace PresentHook {
         uintptr_t minAddr = (uintptr_t)si.lpMinimumApplicationAddress;
         uintptr_t maxAddr = (uintptr_t)si.lpMaximumApplicationAddress;
 
+        HANDLE hSelf = GetCurrentProcess();
+
+        const size_t CHUNK_BYTES = 4096;
+        uintptr_t buffer[CHUNK_BYTES / sizeof(uintptr_t)];
+        SIZE_T bytesRead = 0;
+
         MEMORY_BASIC_INFORMATION mbi;
         uintptr_t addr = minAddr;
 
         while (addr < maxAddr && results.size() < 64) {
             if (!VirtualQuery((LPCVOID)addr, &mbi, sizeof(mbi))) break;
 
-            if (mbi.State == MEM_COMMIT
-                && (mbi.Protect & PAGE_READWRITE
-                    || mbi.Protect & PAGE_EXECUTE_READWRITE
-                    || mbi.Protect & PAGE_WRITECOPY
-                    || mbi.Protect & PAGE_EXECUTE_WRITECOPY)
-                && !(mbi.Protect & PAGE_GUARD)) {
+            bool readable = (mbi.State == MEM_COMMIT)
+                && (mbi.Protect & (PAGE_READWRITE | PAGE_EXECUTE_READWRITE | PAGE_WRITECOPY | PAGE_EXECUTE_WRITECOPY))
+                && !(mbi.Protect & PAGE_GUARD);
 
-                uintptr_t* p = (uintptr_t*)mbi.BaseAddress;
-                size_t count = mbi.RegionSize / sizeof(uintptr_t);
+            if (readable) {
+                uintptr_t regionStart = (uintptr_t)mbi.BaseAddress;
+                uintptr_t regionEnd = regionStart + mbi.RegionSize;
 
-                for (size_t i = 0; i < count; i++) {
-                    if (p[i] == (uintptr_t)vtable) {
-                        IDXGISwapChain* sc = (IDXGISwapChain*)&p[i];
-                        bool dup = false;
-                        for (auto* existing : results) {
-                            if (existing == sc) { dup = true; break; }
+                for (uintptr_t cur = regionStart; cur < regionEnd; cur += CHUNK_BYTES) {
+                    size_t toRead = CHUNK_BYTES;
+                    if (cur + toRead > regionEnd) toRead = regionEnd - cur;
+                    if (toRead < sizeof(uintptr_t)) break;
+
+                    bytesRead = 0;
+                    if (!ReadProcessMemory(hSelf, (LPCVOID)cur, buffer, toRead, &bytesRead)) continue;
+                    if (bytesRead < sizeof(uintptr_t)) continue;
+
+                    size_t entries = bytesRead / sizeof(uintptr_t);
+                    for (size_t i = 0; i < entries; i++) {
+                        if (buffer[i] == (uintptr_t)vtable) {
+                            uintptr_t candidateAddr = cur + i * sizeof(uintptr_t);
+                            void* candidate = (void*)candidateAddr;
+
+                            bool dup = false;
+                            for (auto* existing : results) {
+                                if ((uintptr_t)existing == candidateAddr) { dup = true; break; }
+                            }
+                            if (dup) continue;
+
+                            if (!LooksLikeRealSwapchain(candidate, vtable)) continue;
+
+                            results.push_back((IDXGISwapChain*)candidate);
+                            if (results.size() >= 64) break;
                         }
-                        if (!dup) results.push_back(sc);
                     }
                 }
             }
@@ -132,14 +176,21 @@ namespace PresentHook {
         DestroyWindow(hWnd);
         UnregisterClassA("LavenderDummyWnd", wc.hInstance);
 
+        printf("[PresentHook] Scanning for game swapchains...\n"); fflush(stdout);
         auto candidates = FindAllByVtable(dummyVtable);
         printf("[PresentHook] Found %zu candidate(s).\n", candidates.size()); fflush(stdout);
 
-        if (candidates.empty()) return false;
+        if (candidates.empty()) {
+            printf("[PresentHook] FAILED: no valid swapchain candidates.\n"); fflush(stdout);
+            return false;
+        }
 
         for (size_t i = 0; i < candidates.size(); i++) {
+            printf("[PresentHook]   [%zu] 0x%p", i, candidates[i]); fflush(stdout);
+
             VmtHook* hook = new VmtHook();
             if (!hook->Initialize(candidates[i])) {
+                printf("  VMT init failed\n"); fflush(stdout);
                 delete hook;
                 continue;
             }
@@ -147,18 +198,19 @@ namespace PresentHook {
             hook->Hook(22, (void*)hkPresent1);
             g_hooks.push_back(hook);
             g_swapchains.push_back(candidates[i]);
+            printf("  hooked\n"); fflush(stdout);
         }
 
         printf("[PresentHook] Installed %zu hook(s).\n", g_hooks.size()); fflush(stdout);
+        printf("[PresentHook]   original Present  = 0x%p\n", (void*)o_Present); fflush(stdout);
+        printf("[PresentHook]   original Present1 = 0x%p\n", (void*)o_Present1); fflush(stdout);
         return !g_hooks.empty();
     }
 
     void Shutdown() {
+        for (auto* h : g_hooks) h->Restore();
         Renderer::Shutdown();
-        for (auto* h : g_hooks) {
-            h->Restore();
-            delete h;
-        }
+        for (auto* h : g_hooks) delete h;
         g_hooks.clear();
     }
 }

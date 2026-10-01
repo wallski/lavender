@@ -185,6 +185,8 @@
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <ClCompile Include="src\render\Renderer.cpp" />
+    <ClCompile Include="src\render\Style.cpp" />
+    <ClCompile Include="src\render\Widgets.cpp" />
     <ClCompile Include="ThirdParty\imgui\backends\imgui_impl_dx11.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">NotUsing</PrecompiledHeader>
@@ -237,6 +239,8 @@
     <ClInclude Include="src\core\memory\PatternScan.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\render\Renderer.h" />
+    <ClInclude Include="src\render\Style.h" />
+    <ClInclude Include="src\render\Widgets.h" />
     <ClInclude Include="src\sdk\entity\Entity.h" />
     <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_dx11.h" />
     <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_win32.h" />

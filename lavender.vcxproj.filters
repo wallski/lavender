@@ -60,6 +60,12 @@
     <ClCompile Include="ThirdParty\imgui\backends\imgui_impl_win32.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\render\Style.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\render\Widgets.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\memory\PatternScan.h">
@@ -111,6 +117,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\render\Renderer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\Style.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\render\Widgets.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

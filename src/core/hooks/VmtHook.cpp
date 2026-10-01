@@ -4,20 +4,49 @@
 bool VmtHook::Initialize(void* instance) {
     if (!instance) return false;
 
-    m_originalVtable = *reinterpret_cast<void***>(instance);
-    if (!m_originalVtable) return false;
+    void** vtable = nullptr;
+    __try {
+        vtable = *reinterpret_cast<void***>(instance);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    if (!vtable) return false;
+
+    uintptr_t firstFn = 0;
+    __try {
+        firstFn = reinterpret_cast<uintptr_t>(vtable[0]);
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    if (firstFn < 0x10000 || firstFn > 0x00007FFFFFFFFFFF) return false;
 
     int count = 0;
-    while (m_originalVtable[count] != nullptr && count < 512) count++;
+    __try {
+        while (count < 64 && vtable[count] != nullptr) count++;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    if (count < 4) return false;
+
+    m_originalVtable = vtable;
     m_methodCount = count;
-    if (m_methodCount == 0) return false;
 
     m_newVtable = new void* [m_methodCount];
     for (int i = 0; i < m_methodCount; i++) {
         m_newVtable[i] = m_originalVtable[i];
     }
 
-    *reinterpret_cast<void***>(instance) = m_newVtable;
+    __try {
+        *reinterpret_cast<void***>(instance) = m_newVtable;
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        delete[] m_newVtable;
+        m_newVtable = nullptr;
+        return false;
+    }
     return true;
 }
 

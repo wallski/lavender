@@ -8,5 +8,7 @@ namespace Renderer {
     void RenderFrame();
     bool IsMenuOpen();
     void ToggleMenu();
-    void OnResizeBuffers();
+    void RequestUnload();
+    bool ShouldUnload();
+    int  GetMenuKey();
 }
