@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="lavender.vcxproj" Id="77c3fc8d-00dc-4a90-90c0-4105afb1eca3" />
+</Solution>
