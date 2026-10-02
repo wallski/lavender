@@ -4,6 +4,7 @@
 #include "core/interfaces/InterfaceManager.h"
 #include "core/memory/PatternScan.h"
 #include "core/features/visuals/chams/Chams.h"
+#include "core/features/visuals/chams/Materials.h"
 #include "render/Renderer.h"
 #include <thread>
 #include <cstdarg>
@@ -160,6 +161,14 @@ void MainThread(HMODULE hModule) {
     Chams::SetEntityListGlobal(OffsetConfig::globals.dwEntityList);
     Chams::SetLocalPawnGlobal(OffsetConfig::globals.dwLocalPlayerPawn);
 
+    Log("[Materials] Initializing...\n");
+    if (!Materials::Initialize()) {
+        Log("[Materials] Init failed - chams won't render through walls\n");
+    }
+    else {
+        Log("[Materials] Loaded successfully\n");
+    }
+
     PresentHook::Initialize();
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
@@ -176,12 +185,24 @@ void MainThread(HMODULE hModule) {
         else Log("[SortHook] hook install failed\n");
     }
 
+    ULONGLONG lastStats = GetTickCount64();
     while (!Renderer::ShouldUnload()) {
         if (GetAsyncKeyState(VK_END) & 1) Renderer::RequestUnload();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
+
+        ULONGLONG now = GetTickCount64();
+        if (now - lastStats >= 3000) {
+            Log("[Chams] sortCalls=%lld tinted=%lld scanned=%lld enabled=%d\n",
+                (long long)g_sortCallCount,
+                (long long)Chams::GetTintCount(),
+                (long long)Chams::GetScannedCount(),
+                Chams::IsEnabled() ? 1 : 0);
+            lastStats = now;
+        }
     }
 
     RestoreSortHook();
+    Materials::Shutdown();
     PresentHook::Shutdown();
     fclose(f);
     LogClose();

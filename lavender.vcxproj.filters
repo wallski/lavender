@@ -72,6 +72,9 @@
     <ClCompile Include="src\core\hooks\InlineHook.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\features\visuals\chams\Materials.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\memory\PatternScan.h">
@@ -135,6 +138,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\hooks\InlineHook.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\features\visuals\chams\Materials.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

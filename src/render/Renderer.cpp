@@ -7,6 +7,7 @@
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
 #include "../core/features/visuals/chams/Chams.h"
+#include "../core/features/visuals/chams/Materials.h"
 #include "../config/OffsetConfig.h"
 
 LRESULT WINAPI ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -121,6 +122,13 @@ namespace Renderer {
         }
     }
 
+    static const char* kMaterialNames[] = {
+        "None",
+        "Matte", "Flat", "Glow", "Outlines", "Bloom",
+        "Matte (ignorez)", "Flat (ignorez)", "Glow (ignorez)",
+        "Outlines (ignorez)", "Bloom (ignorez)"
+    };
+
     static void DrawLegitTab() {
         Widgets::SectionHeader("Aim");
         Widgets::TextMuted("Coming in a later iteration.");
@@ -134,14 +142,56 @@ namespace Renderer {
             Chams::SetEnabled(enabled);
         }
 
-        float color[4];
-        float* cur = Chams::GetColor();
-        color[0] = cur[0];
-        color[1] = cur[1];
-        color[2] = cur[2];
-        color[3] = cur[3];
-        if (Widgets::ColorPicker("Color", color)) {
-            Chams::SetColor(color);
+        Widgets::SectionHeader("Visible");
+
+        bool visEnabled = Chams::IsVisibleEnabled();
+        if (Widgets::Toggle("Visible enabled", &visEnabled)) {
+            Chams::SetVisibleEnabled(visEnabled);
+        }
+
+        {
+            float visColor[4];
+            float* cur = Chams::GetVisibleColor();
+            visColor[0] = cur[0];
+            visColor[1] = cur[1];
+            visColor[2] = cur[2];
+            visColor[3] = cur[3];
+            if (Widgets::ColorPicker("Visible color", visColor)) {
+                Chams::SetVisibleColor(visColor);
+            }
+        }
+
+        {
+            int visMat = (int)Chams::GetVisibleMaterial();
+            if (ImGui::Combo("Visible material", &visMat, kMaterialNames, IM_ARRAYSIZE(kMaterialNames))) {
+                Chams::SetVisibleMaterial((Materials::Id)visMat);
+            }
+        }
+
+        Widgets::SectionHeader("Occluded");
+
+        bool occEnabled = Chams::IsOccludedEnabled();
+        if (Widgets::Toggle("Occluded enabled", &occEnabled)) {
+            Chams::SetOccludedEnabled(occEnabled);
+        }
+
+        {
+            float occColor[4];
+            float* cur = Chams::GetOccludedColor();
+            occColor[0] = cur[0];
+            occColor[1] = cur[1];
+            occColor[2] = cur[2];
+            occColor[3] = cur[3];
+            if (Widgets::ColorPicker("Occluded color", occColor)) {
+                Chams::SetOccludedColor(occColor);
+            }
+        }
+
+        {
+            int occMat = (int)Chams::GetOccludedMaterial();
+            if (ImGui::Combo("Occluded material", &occMat, kMaterialNames, IM_ARRAYSIZE(kMaterialNames))) {
+                Chams::SetOccludedMaterial((Materials::Id)occMat);
+            }
         }
     }
 
@@ -208,21 +258,23 @@ namespace Renderer {
             ImGui::TextUnformatted("LAVENDER");
             ImGui::PopStyleColor();
             ImGui::PopFont();
-            ImGui::Dummy(ImVec2(0, 14));
+            ImGui::Dummy(ImVec2(0, 16));
 
-            const char* tabs[] = { "Legit", "Players", "World", "Misc", "Config" };
+            const char* titles[] = { "Legit",   "Players",        "World",          "Misc",          "Config" };
+            const char* subtitles[] = { "aim assist", "visuals & chams", "world effects", "miscellaneous", "settings" };
+
             for (int i = 0; i < 5; i++) {
-                Widgets::SidebarTab(tabs[i], &g_activeTab, i);
+                Widgets::SidebarItem(titles[i], subtitles[i], &g_activeTab, i);
             }
         }
         ImGui::EndChild();
 
         ImGui::SameLine();
 
-        ImGui::PushStyleColor(ImGuiCol_ChildBg, Style::Bg);
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, Style::Panel);
         ImGui::BeginChild("##content", ImVec2(0, 0), false);
         {
-            ImGui::Dummy(ImVec2(0, 10));
+            ImGui::Dummy(ImVec2(0, 6));
             switch (g_activeTab) {
             case 0: DrawLegitTab();   break;
             case 1: DrawPlayersTab(); break;

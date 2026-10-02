@@ -165,6 +165,7 @@
   <ItemGroup>
     <ClCompile Include="src\config\OffsetConfig.cpp" />
     <ClCompile Include="src\core\features\visuals\chams\Chams.cpp" />
+    <ClCompile Include="src\core\features\visuals\chams\Materials.cpp" />
     <ClCompile Include="src\core\hooks\InlineHook.cpp" />
     <ClCompile Include="src\core\hooks\PresentHook.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
@@ -235,6 +236,7 @@
   <ItemGroup>
     <ClInclude Include="src\config\OffsetConfig.h" />
     <ClInclude Include="src\core\features\visuals\chams\Chams.h" />
+    <ClInclude Include="src\core\features\visuals\chams\Materials.h" />
     <ClInclude Include="src\core\hooks\InlineHook.h" />
     <ClInclude Include="src\core\hooks\PresentHook.h" />
     <ClInclude Include="src\core\hooks\VmtHook.h" />

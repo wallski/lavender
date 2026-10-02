@@ -33,6 +33,8 @@ namespace Memory {
         uintptr_t moduleBase = reinterpret_cast<uintptr_t>(modInfo.lpBaseOfDll);
         size_t moduleSize = modInfo.SizeOfImage;
 
+        if (moduleSize <= patternBytes.size()) return 0;
+
         for (uintptr_t i = 0; i < moduleSize - patternBytes.size(); i++) {
             bool found = true;
             for (size_t j = 0; j < patternBytes.size(); j++) {
@@ -50,7 +52,6 @@ namespace Memory {
 
     std::vector<uintptr_t> FindAllPatterns(const std::string& moduleName, const std::string& pattern) {
         std::vector<uintptr_t> results;
-
         std::vector<int> patternBytes;
         if (!ParsePattern(pattern, patternBytes)) return results;
 
@@ -62,7 +63,6 @@ namespace Memory {
 
         uintptr_t moduleBase = reinterpret_cast<uintptr_t>(modInfo.lpBaseOfDll);
         size_t moduleSize = modInfo.SizeOfImage;
-
         if (moduleSize <= patternBytes.size()) return results;
 
         for (uintptr_t i = 0; i < moduleSize - patternBytes.size(); i++) {
@@ -78,12 +78,17 @@ namespace Memory {
                 i += patternBytes.size() - 1;
             }
         }
-
         return results;
     }
 
     uintptr_t ResolveRelativeAddress(uintptr_t instruction, int offset, int instructionSize) {
         int32_t relativeOffset = *reinterpret_cast<int32_t*>(instruction + offset);
         return instruction + instructionSize + relativeOffset;
+    }
+
+    uintptr_t GetExport(const std::string& moduleName, const std::string& exportName) {
+        HMODULE hModule = GetModuleHandleA(moduleName.c_str());
+        if (!hModule) return 0;
+        return reinterpret_cast<uintptr_t>(GetProcAddress(hModule, exportName.c_str()));
     }
 }
