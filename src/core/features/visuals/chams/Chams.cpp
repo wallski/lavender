@@ -1,14 +1,16 @@
 #include "pch.h"
 #include "Chams.h"
+#include "../../../../config/OffsetConfig.h"
+#include "../../../cvar/CVar.h"
 
 static volatile LONG g_enabled = 0;
+static volatile LONG g_teamCheck = 0;
 static volatile LONG g_material = (LONG)Materials::Id::Flat;
 static volatile LONG g_occluded = 0;
 static float g_color[4] = { 0.0f, 1.0f, 0.4f, 1.0f };
 static uintptr_t g_entityListGlobal = 0;
 static uintptr_t g_localPawnGlobal = 0;
 static volatile LONG64 g_tintCount = 0;
-static volatile LONG64 g_scannedCount = 0;
 
 namespace Chams {
 
@@ -19,6 +21,11 @@ namespace Chams {
 
     static uint32_t __TryReadU32(uintptr_t addr) {
         __try { return *reinterpret_cast<uint32_t*>(addr); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    }
+
+    static int __TryReadInt(uintptr_t addr) {
+        __try { return *reinterpret_cast<int*>(addr); }
         __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
     }
 
@@ -86,6 +93,9 @@ namespace Chams {
     bool IsEnabled() { return g_enabled != 0; }
     void SetEnabled(bool enabled) { InterlockedExchange(&g_enabled, enabled ? 1 : 0); }
 
+    bool IsTeamCheck() { return g_teamCheck != 0; }
+    void SetTeamCheck(bool enabled) { InterlockedExchange(&g_teamCheck, enabled ? 1 : 0); }
+
     Materials::Id GetMaterial() { return (Materials::Id)g_material; }
     void SetMaterial(Materials::Id id) { InterlockedExchange(&g_material, (LONG)id); }
 
@@ -102,23 +112,90 @@ namespace Chams {
     }
 
     int64_t GetTintCount() { return g_tintCount; }
-    int64_t GetScannedCount() { return g_scannedCount; }
+    int64_t GetScannedCount() { return g_tintCount; }
+
+    void ApplyLodOverride() {
+        struct Entry {
+            const char* name;
+            float value;
+        };
+
+        const Entry floatCvars[] = {
+            { "sc_instanced_mesh_lod_bias", 100.0f },
+            { "sc_instanced_mesh_lod_bias_shadow", 100.0f },
+            { "sc_instanced_mesh_size_cull_bias", 100.0f },
+            { "sc_instanced_mesh_size_cull_bias_shadow", 100.0f },
+            { "sc_screen_size_lod_scale_override", 1.0f },
+            { "sc_dithered_lod_transition_amt", 0.0f },
+            { "r_texture_lod_scale", 0.0f },
+            { "r_fallback_texture_lod_scale", 0.0f }
+        };
+
+        for (const auto& e : floatCvars) {
+            CConVar* c = CVar::Find(e.name);
+            if (!c) {
+                printf("[Chams] cvar %s NOT FOUND\n", e.name);
+                continue;
+            }
+            float before = c->Get<float>();
+            c->Set(e.value);
+            float after = c->Get<float>();
+            printf("[Chams] %s %.3f -> %.3f\n", e.name, before, after);
+        }
+
+        const Entry intCvars[] = {
+            { "sc_force_lod_level", 0.0f },
+            { "sc_no_cull", 1.0f },
+            { "sc_disable_culling_boxes", 1.0f },
+            { "sc_skip_traversal", 0.0f },
+            { "sc_aggregate_gpu_culling", 0.0f },
+            { "sc_aggregate_gpu_occlusion_culling", 0.0f },
+            { "sc_instanced_mesh_gpu_culling", 0.0f },
+            { "sc_instanced_mesh_gpu_occlusion_culling", 0.0f },
+            { "sc_instanced_mesh_gpu_density_culling", 0.0f },
+            { "sc_instanced_mesh_gpu_vis_culling", 0.0f },
+            { "sc_mesh_gpu_occlusion_culling", 0.0f },
+            { "sc_mesh_gpu_volume_culling", 0.0f },
+            { "sc_allow_dithered_lod", 0.0f },
+            { "skeleton_instance_lod_optimization", 0.0f }
+        };
+
+        for (const auto& e : intCvars) {
+            CConVar* c = CVar::Find(e.name);
+            if (!c) {
+                printf("[Chams] cvar %s NOT FOUND\n", e.name);
+                continue;
+            }
+            int before = c->Get<int>();
+            c->Set((int)e.value);
+            int after = c->Get<int>();
+            printf("[Chams] %s %d -> %d\n", e.name, before, after);
+        }
+
+        fflush(stdout);
+    }
 
     void OnSortCall(void* array, uint32_t count) {
         if (g_enabled == 0) return;
         uintptr_t arr = (uintptr_t)array;
         if (arr < 0x10000) return;
+        if (count > 65536) count = 65536;
 
         const Materials::Id resolved = ResolveMaterial();
         const uintptr_t material = Materials::Get(resolved);
         const uint32_t packed = PackColor(g_color);
 
         uintptr_t localPawn = __TryReadPtr(g_localPawnGlobal);
-        uint32_t maxCheck = count > 300 ? 300 : count;
 
-        for (uint32_t i = 0; i < maxCheck; i++) {
+        int localTeam = 0;
+        if (g_teamCheck != 0 && localPawn) {
+            localTeam = __TryReadInt(localPawn + OffsetConfig::fields.m_iTeamNum);
+        }
+
+        int64_t tinted = 0;
+
+        for (uint32_t i = 0; i < count; i++) {
             uintptr_t prim = arr + (uintptr_t)i * 0x70;
-            InterlockedIncrement64(&g_scannedCount);
 
             uintptr_t sceneObj = __TryReadPtr(prim + 0x18);
             if (!sceneObj) continue;
@@ -133,12 +210,21 @@ namespace Chams {
             if (name[0] != 'C') continue;
             if (strcmp(name, "C_CSPlayerPawn") != 0) continue;
 
+            if (localTeam != 0) {
+                int entTeam = __TryReadInt(ent + OffsetConfig::fields.m_iTeamNum);
+                if (entTeam == localTeam) continue;
+            }
+
             if (material) {
                 __TryWritePtr(prim + 0x20, material);
                 __TryWritePtr(prim + 0x28, material);
             }
             __TryWriteU32(prim + 0x50, packed);
-            InterlockedIncrement64(&g_tintCount);
+            tinted++;
+        }
+
+        if (tinted > 0) {
+            InterlockedAdd64(&g_tintCount, tinted);
         }
     }
 }

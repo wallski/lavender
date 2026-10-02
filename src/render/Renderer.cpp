@@ -220,6 +220,58 @@ namespace Renderer {
         "Head", "Neck", "Chest", "Stomach", "Pelvis", "Arms", "Legs"
     };
 
+    static void DrawHitboxDropdown(uint32_t* hitboxes) {
+        constexpr float rowH = 30.0f;
+        ImGui::PushID("##hitbox_dropdown");
+
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        float avail = ImGui::GetContentRegionAvail().x;
+
+        ImGui::InvisibleButton("##row", ImVec2(avail, rowH));
+        bool clicked = ImGui::IsItemClicked();
+        bool hovered = ImGui::IsItemHovered();
+
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        if (hovered) {
+            d->AddRectFilled(pos, ImVec2(pos.x + avail, pos.y + rowH),
+                ImGui::GetColorU32(ImVec4(1, 1, 1, 0.030f)), 4.0f);
+        }
+
+        ImVec2 labelSize = ImGui::CalcTextSize("Hitboxes");
+        d->AddText(ImVec2(pos.x + Style::RowInnerPad, pos.y + rowH * 0.5f - labelSize.y * 0.5f),
+            ImGui::GetColorU32(Style::Text), "Hitboxes");
+
+        char preview[128] = "";
+        for (int i = 0; i < 7; i++) {
+            if (*hitboxes & (1u << i)) {
+                if (preview[0]) strcat_s(preview, ", ");
+                strcat_s(preview, kHitboxNames[i]);
+            }
+        }
+        if (!preview[0]) strcpy_s(preview, "None");
+
+        ImVec2 ts = ImGui::CalcTextSize(preview);
+        d->AddText(ImVec2(pos.x + avail - ts.x - Style::RowInnerPad, pos.y + rowH * 0.5f - ts.y * 0.5f),
+            ImGui::GetColorU32(Style::TextMuted), preview);
+
+        if (clicked) ImGui::OpenPopup("##hb_popup");
+
+        if (ImGui::BeginPopup("##hb_popup")) {
+            for (int i = 0; i < 7; i++) {
+                bool on = (*hitboxes & (1u << i)) != 0;
+                if (ImGui::Checkbox(kHitboxNames[i], &on)) {
+                    if (on) *hitboxes |= (1u << i);
+                    else    *hitboxes &= ~(1u << i);
+                    if (*hitboxes == 0) *hitboxes = 1u << i;
+                    Triggerbot::SetHitboxes(*hitboxes);
+                }
+            }
+            ImGui::EndPopup();
+        }
+
+        ImGui::PopID();
+    }
+
     static void DrawLegitTab() {
         bool enabled = Triggerbot::IsEnabled();
         int key = Triggerbot::GetKey();
@@ -241,22 +293,17 @@ namespace Renderer {
 
         Widgets::EndCard();
 
-        Widgets::BeginCard("HITBOXES", 7);
-        for (int i = 0; i < 7; i++) {
-            bool on = (hitboxes & (1u << i)) != 0;
-            if (Widgets::Toggle(kHitboxNames[i], &on)) {
-                uint32_t next = hitboxes;
-                if (on) next |= (1u << i);
-                else    next &= ~(1u << i);
-                if (next == 0) next = 1u << i;
-                hitboxes = next;
-                Triggerbot::SetHitboxes(hitboxes);
-            }
-        }
+        Widgets::BeginCard("HITBOXES", 1);
+        DrawHitboxDropdown(&hitboxes);
         Widgets::EndCard();
 
-        Widgets::BeginCard("TIMING", 1);
+        Widgets::BeginCard("TIMING", 2);
         if (Widgets::SliderInt("On-target ms", &delay, 0, 1000)) {
+            Triggerbot::SetDelayMs(delay);
+        }
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Style::RowInnerPad);
+        ImGui::SetNextItemWidth(120);
+        if (ImGui::InputInt("##delay_input", &delay, 10, 100)) {
             Triggerbot::SetDelayMs(delay);
         }
         Widgets::EndCard();
@@ -268,8 +315,9 @@ namespace Renderer {
         float color[4] = { cur[0], cur[1], cur[2], cur[3] };
         int mat = (int)Chams::GetMaterial();
         bool occluded = Chams::IsOccluded();
+        bool chamsTeamCheck = Chams::IsTeamCheck();
 
-        Widgets::BeginCard("CHAMS", 4);
+        Widgets::BeginCard("CHAMS", 5);
 
         if (Widgets::Toggle("Chams", &enabled)) {
             Chams::SetEnabled(enabled);
@@ -282,6 +330,9 @@ namespace Renderer {
         }
         if (Widgets::Toggle("Occluded", &occluded)) {
             Chams::SetOccluded(occluded);
+        }
+        if (Widgets::Toggle("Team check", &chamsTeamCheck)) {
+            Chams::SetTeamCheck(chamsTeamCheck);
         }
 
         Widgets::EndCard();

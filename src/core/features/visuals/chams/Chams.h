@@ -9,6 +9,9 @@ namespace Chams {
     bool IsEnabled();
     void SetEnabled(bool enabled);
 
+    bool IsTeamCheck();
+    void SetTeamCheck(bool enabled);
+
     Materials::Id GetMaterial();
     void SetMaterial(Materials::Id id);
 
@@ -17,6 +20,8 @@ namespace Chams {
 
     float* GetColor();
     void SetColor(const float color[4]);
+
+    void ApplyLodOverride();
 
     void OnSortCall(void* array, uint32_t count);
 

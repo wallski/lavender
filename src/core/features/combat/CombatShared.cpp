@@ -9,7 +9,6 @@ namespace CombatShared {
     static uintptr_t g_traceRayFn = 0;
     static uintptr_t g_traceFilterInitFn = 0;
     static volatile LONG g_includeTeammates = 0;
-    static volatile LONG64 g_frame_counter = 0;
 
     static uintptr_t ReadPtr(uintptr_t addr) {
         __try { return *(uintptr_t*)addr; }
@@ -42,13 +41,12 @@ namespace CombatShared {
     }
 
     void Initialize() {
-        g_traceRayFn = Memory::FindPattern("client.dll",
-            "48 89 54 24 ?? 48 89 4C 24 ?? 55 53 56 57 41 56 41 57 48 8D AC 24 ?? ?? ?? ?? B8 ?? ?? ?? ??");
+        g_traceRayFn = 0;
         g_traceFilterInitFn = Memory::FindPattern("client.dll",
             "48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 0F B6 41 ?? 33 FF 24");
 
-        printf("[CombatShared] trace_ray=0x%llX filter_init=0x%llX\n",
-            (unsigned long long)g_traceRayFn, (unsigned long long)g_traceFilterInitFn);
+        printf("[CombatShared] trace=disabled filter_init=0x%llX\n",
+            (unsigned long long)g_traceFilterInitFn);
         fflush(stdout);
     }
 
@@ -239,13 +237,13 @@ namespace CombatShared {
 
             GetBonePosition(entity, 7, e.headPos);
             GetBonePosition(entity, 6, e.neckPos);
-            GetBonePosition(entity, 4, e.chestPos);
+            GetBonePosition(entity, 3, e.chestPos);
             GetBonePosition(entity, 2, e.stomachPos);
             GetBonePosition(entity, 1, e.pelvisPos);
             GetBonePosition(entity, 9, e.leftArmPos);
             GetBonePosition(entity, 13, e.rightArmPos);
-            GetBonePosition(entity, 18, e.leftLegPos);
-            GetBonePosition(entity, 21, e.rightLegPos);
+            GetBonePosition(entity, 17, e.leftLegPos);
+            GetBonePosition(entity, 20, e.rightLegPos);
 
             Vec3 eye;
             if (GetEyePosition(localPawn, eye)) {

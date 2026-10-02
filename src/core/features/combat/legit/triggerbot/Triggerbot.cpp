@@ -21,6 +21,7 @@ namespace Triggerbot {
     static std::atomic<bool> g_shouldFire{ false };
     static std::atomic<bool> g_attackCurrentlyWritten{ false };
     static ULONGLONG g_onTargetSince = 0;
+    static ULONGLONG g_lastOnTarget = 0;
     static ULONGLONG g_nextFireAllowed = 0;
 
     static uintptr_t g_createMoveFn = 0;
@@ -31,6 +32,8 @@ namespace Triggerbot {
     static bool g_createMoveHookInstalled = false;
 
     static constexpr uintptr_t kMessageImplOffset = 0x10;
+    static constexpr ULONGLONG kOffTargetGraceMs = 300;
+    static constexpr ULONGLONG kFireCooldownMs = 80;
 
     static constexpr uint32_t HB_HEAD = 1u << 0;
     static constexpr uint32_t HB_NECK = 1u << 1;
@@ -400,15 +403,15 @@ namespace Triggerbot {
     }
 
     uint32_t GetHitboxes() { return (uint32_t)g_hitboxes; }
-    void SetHitboxes(uint32_t v) {
-        if (v == 0) v = HB_HEAD;
-        InterlockedExchange(&g_hitboxes, (LONG)v);
+    void SetHitboxes(uint32_t mask) {
+        if (mask == 0) mask = HB_HEAD;
+        InterlockedExchange(&g_hitboxes, (LONG)mask);
     }
 
     int GetDelayMs() { return g_delay_ms; }
     void SetDelayMs(int ms) {
         if (ms < 0) ms = 0;
-        if (ms > 1000) ms = 1000;
+        if (ms > 2000) ms = 2000;
         InterlockedExchange(&g_delay_ms, ms);
     }
 
@@ -420,39 +423,71 @@ namespace Triggerbot {
         return pid == GetCurrentProcessId();
     }
 
-    static bool HitboxOnScreen(const Vec3& bonePos, float cx, float cy, float radiusSq) {
+    static bool CheckBone(const Vec3& bonePos, float cx, float cy, float radius) {
         Vec3 screen;
         if (!CombatShared::WorldToScreen(bonePos, screen)) return false;
         float dx = screen.x - cx;
         float dy = screen.y - cy;
-        return (dx * dx + dy * dy) < radiusSq;
+        return (dx * dx + dy * dy) < radius * radius;
+    }
+
+    static bool CheckEnemy(const CombatShared::Enemy& e, uint32_t hb, float cx, float cy) {
+        constexpr float rHead = 20.0f;
+        constexpr float rChest = 35.0f;
+        constexpr float rStomach = 28.0f;
+        constexpr float rPelvis = 26.0f;
+        constexpr float rLimb = 22.0f;
+
+        if ((hb & HB_HEAD) && CheckBone(e.headPos, cx, cy, rHead)) return true;
+        if ((hb & HB_NECK) && CheckBone(e.neckPos, cx, cy, rHead)) return true;
+
+        if (hb & HB_CHEST) {
+            if (CheckBone(e.chestPos, cx, cy, rChest)) return true;
+            if (CheckBone(e.stomachPos, cx, cy, rChest)) return true;
+        }
+
+        if ((hb & HB_STOMACH) && CheckBone(e.stomachPos, cx, cy, rStomach)) return true;
+        if ((hb & HB_PELVIS) && CheckBone(e.pelvisPos, cx, cy, rPelvis)) return true;
+
+        if (hb & HB_ARMS) {
+            if (CheckBone(e.leftArmPos, cx, cy, rLimb)) return true;
+            if (CheckBone(e.rightArmPos, cx, cy, rLimb)) return true;
+        }
+
+        if (hb & HB_LEGS) {
+            if (CheckBone(e.leftLegPos, cx, cy, rLimb)) return true;
+            if (CheckBone(e.rightLegPos, cx, cy, rLimb)) return true;
+        }
+
+        return false;
     }
 
     void Tick() {
         if (g_enabled == 0) {
             g_shouldFire.store(false);
             g_onTargetSince = 0;
+            g_lastOnTarget = 0;
             return;
         }
         if (Renderer::IsMenuOpen()) return;
         if (!IsGameFocused()) return;
 
-        ULONGLONG now = GetTickCount64();
-
         uintptr_t localPawn = CombatShared::GetLocalPawn();
         if (!localPawn) {
             g_shouldFire.store(false);
             g_onTargetSince = 0;
+            g_lastOnTarget = 0;
             return;
         }
 
         if ((GetAsyncKeyState(g_key) & 0x8000) == 0) {
             g_shouldFire.store(false);
             g_onTargetSince = 0;
+            g_lastOnTarget = 0;
             return;
         }
 
-        if (now < g_nextFireAllowed) return;
+        ULONGLONG now = GetTickCount64();
 
         RECT rect;
         HWND hwnd = GetForegroundWindow();
@@ -463,39 +498,36 @@ namespace Triggerbot {
         float cx = screenW * 0.5f;
         float cy = screenH * 0.5f;
 
-        const float radiusSq = 15.0f * 15.0f;
         const uint32_t hb = (uint32_t)g_hitboxes;
-
         auto enemies = CombatShared::GetEnemies();
-        bool hasTarget = false;
 
+        bool hasTarget = false;
         for (const auto& e : enemies) {
             if (!e.visible) continue;
-
-            if ((hb & HB_HEAD) && HitboxOnScreen(e.headPos, cx, cy, radiusSq)) { hasTarget = true; break; }
-            if ((hb & HB_NECK) && HitboxOnScreen(e.neckPos, cx, cy, radiusSq)) { hasTarget = true; break; }
-            if ((hb & HB_CHEST) && HitboxOnScreen(e.chestPos, cx, cy, radiusSq)) { hasTarget = true; break; }
-            if ((hb & HB_STOMACH) && HitboxOnScreen(e.stomachPos, cx, cy, radiusSq)) { hasTarget = true; break; }
-            if ((hb & HB_PELVIS) && HitboxOnScreen(e.pelvisPos, cx, cy, radiusSq)) { hasTarget = true; break; }
-            if ((hb & HB_ARMS) && (HitboxOnScreen(e.leftArmPos, cx, cy, radiusSq) || HitboxOnScreen(e.rightArmPos, cx, cy, radiusSq))) { hasTarget = true; break; }
-            if ((hb & HB_LEGS) && (HitboxOnScreen(e.leftLegPos, cx, cy, radiusSq) || HitboxOnScreen(e.rightLegPos, cx, cy, radiusSq))) { hasTarget = true; break; }
+            if (CheckEnemy(e, hb, cx, cy)) {
+                hasTarget = true;
+                break;
+            }
         }
 
-        if (!hasTarget) {
-            g_onTargetSince = 0;
-            return;
+        if (hasTarget) {
+            if (g_onTargetSince == 0) {
+                g_onTargetSince = now;
+            }
+            g_lastOnTarget = now;
+        }
+        else {
+            if (g_lastOnTarget == 0 || (now - g_lastOnTarget) > kOffTargetGraceMs) {
+                g_onTargetSince = 0;
+                g_lastOnTarget = 0;
+                return;
+            }
         }
 
-        if (g_onTargetSince == 0) {
-            g_onTargetSince = now;
-            return;
-        }
-
-        int delay = g_delay_ms;
-        if ((now - g_onTargetSince) < (ULONGLONG)delay) return;
+        if (now - g_onTargetSince < (ULONGLONG)g_delay_ms) return;
+        if (now < g_nextFireAllowed) return;
 
         g_shouldFire.store(true);
-        g_onTargetSince = 0;
-        g_nextFireAllowed = now + 120;
+        g_nextFireAllowed = now + kFireCooldownMs;
     }
 }

@@ -85,6 +85,7 @@ namespace ConfigManager {
         f << "chams.enabled=" << (Chams::IsEnabled() ? 1 : 0) << "\n";
         f << "chams.material=" << (int)Chams::GetMaterial() << "\n";
         f << "chams.occluded=" << (Chams::IsOccluded() ? 1 : 0) << "\n";
+        f << "chams.team_check=" << (Chams::IsTeamCheck() ? 1 : 0) << "\n";
         const float* c = Chams::GetColor();
         f << "chams.color_r=" << c[0] << "\n";
         f << "chams.color_g=" << c[1] << "\n";
@@ -118,6 +119,7 @@ namespace ConfigManager {
         bool chamsEnabled = false;
         int chamsMaterial = (int)Materials::Id::Flat;
         bool chamsOccluded = false;
+        bool chamsTeamCheck = false;
         float chamsColor[4] = { 0.0f, 1.0f, 0.4f, 1.0f };
         bool removalsFlash = false;
         bool skyboxEnabled = false;
@@ -125,7 +127,7 @@ namespace ConfigManager {
         bool triggerEnabled = false;
         int triggerKey = VK_XBUTTON2;
         bool triggerTeamCheck = true;
-        unsigned int triggerHitboxes = 1;
+        uint32_t triggerHitboxes = 1;
         int triggerDelay = 60;
         int menuKey = VK_DELETE;
         float accent[3] = { Style::Accent.x, Style::Accent.y, Style::Accent.z };
@@ -147,6 +149,7 @@ namespace ConfigManager {
             if (key == "chams.enabled") chamsEnabled = ParseBool(val);
             else if (key == "chams.material") chamsMaterial = ParseInt(val, chamsMaterial);
             else if (key == "chams.occluded") chamsOccluded = ParseBool(val);
+            else if (key == "chams.team_check") chamsTeamCheck = ParseBool(val);
             else if (key == "chams.color_r") chamsColor[0] = ParseFloat(val, chamsColor[0]);
             else if (key == "chams.color_g") chamsColor[1] = ParseFloat(val, chamsColor[1]);
             else if (key == "chams.color_b") chamsColor[2] = ParseFloat(val, chamsColor[2]);
@@ -157,7 +160,7 @@ namespace ConfigManager {
             else if (key == "trigger.enabled") triggerEnabled = ParseBool(val);
             else if (key == "trigger.key") triggerKey = ParseInt(val, triggerKey);
             else if (key == "trigger.team_check") triggerTeamCheck = ParseBool(val);
-            else if (key == "trigger.hitboxes") triggerHitboxes = (unsigned int)ParseInt(val, (int)triggerHitboxes);
+            else if (key == "trigger.hitboxes") triggerHitboxes = (uint32_t)ParseInt(val, (int)triggerHitboxes);
             else if (key == "trigger.delay") triggerDelay = ParseInt(val, triggerDelay);
             else if (key == "menu.key") menuKey = ParseInt(val, menuKey);
             else if (key == "menu.accent_r") accent[0] = ParseFloat(val, accent[0]);
@@ -168,6 +171,7 @@ namespace ConfigManager {
         Chams::SetEnabled(chamsEnabled);
         Chams::SetMaterial((Materials::Id)chamsMaterial);
         Chams::SetOccluded(chamsOccluded);
+        Chams::SetTeamCheck(chamsTeamCheck);
         Chams::SetColor(chamsColor);
         Removals::SetFlashEnabled(removalsFlash);
         Skybox::SetEnabled(skyboxEnabled);

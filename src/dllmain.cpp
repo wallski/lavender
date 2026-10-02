@@ -4,6 +4,7 @@
 #include "core/hooks/PresentHook.h"
 #include "core/interfaces/InterfaceManager.h"
 #include "core/memory/PatternScan.h"
+#include "core/cvar/CVar.h"
 #include "core/features/visuals/chams/Chams.h"
 #include "core/features/visuals/chams/Materials.h"
 #include "core/features/visuals/skybox/Skybox.h"
@@ -180,6 +181,10 @@ void MainThread(HMODULE hModule) {
         Log("[Lavender] Skybox failed (feature disabled)\n");
     }
 
+    if (CVar::Initialize()) {
+        Chams::ApplyLodOverride();
+    }
+
     CombatShared::Initialize();
     Triggerbot::Initialize();
 
@@ -208,6 +213,7 @@ void MainThread(HMODULE hModule) {
     Triggerbot::Shutdown();
     RestoreSortHook();
     CombatShared::Shutdown();
+    CVar::Shutdown();
     Skybox::Shutdown();
     Materials::Shutdown();
     ConfigManager::Shutdown();

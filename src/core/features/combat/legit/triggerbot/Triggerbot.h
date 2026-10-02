@@ -2,6 +2,7 @@
 #include <cstdint>
 
 namespace Triggerbot {
+
     bool Initialize();
     void Shutdown();
 
@@ -15,7 +16,7 @@ namespace Triggerbot {
     void SetTeamCheck(bool v);
 
     uint32_t GetHitboxes();
-    void SetHitboxes(uint32_t v);
+    void SetHitboxes(uint32_t mask);
 
     int GetDelayMs();
     void SetDelayMs(int ms);
