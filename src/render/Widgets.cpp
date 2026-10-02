@@ -385,6 +385,7 @@ namespace Widgets {
     }
 
     void BeginCard(const char* title, int rows) {
+        ImGui::PushID(title);
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
             ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
 
@@ -418,6 +419,7 @@ namespace Widgets {
         s_cardStack.pop_back();
 
         ImGui::PopStyleVar();
+        ImGui::PopID();
 
         ImGui::Dummy(ImVec2(0, 10.0f));
     }

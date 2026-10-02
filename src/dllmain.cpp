@@ -7,6 +7,7 @@
 #include "core/cvar/CVar.h"
 #include "core/features/visuals/chams/Chams.h"
 #include "core/features/visuals/chams/Materials.h"
+#include "core/features/visuals/esp/Esp.h"
 #include "core/features/visuals/skybox/Skybox.h"
 #include "core/features/combat/CombatShared.h"
 #include "core/features/combat/legit/triggerbot/Triggerbot.h"
@@ -214,6 +215,7 @@ void MainThread(HMODULE hModule) {
     RestoreSortHook();
     CombatShared::Shutdown();
     CVar::Shutdown();
+    Esp::Shutdown();
     Skybox::Shutdown();
     Materials::Shutdown();
     ConfigManager::Shutdown();

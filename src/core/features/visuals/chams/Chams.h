@@ -24,7 +24,4 @@ namespace Chams {
     void ApplyLodOverride();
 
     void OnSortCall(void* array, uint32_t count);
-
-    int64_t GetTintCount();
-    int64_t GetScannedCount();
 }

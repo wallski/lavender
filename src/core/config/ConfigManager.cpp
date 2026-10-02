@@ -2,6 +2,7 @@
 #include "ConfigManager.h"
 #include "../features/visuals/chams/Chams.h"
 #include "../features/visuals/chams/Materials.h"
+#include "../features/visuals/esp/Esp.h"
 #include "../features/visuals/removals/Removals.h"
 #include "../features/visuals/skybox/Skybox.h"
 #include "../features/combat/legit/triggerbot/Triggerbot.h"
@@ -92,6 +93,24 @@ namespace ConfigManager {
         f << "chams.color_b=" << c[2] << "\n";
         f << "chams.color_a=" << c[3] << "\n";
 
+        f << "esp.enabled=" << (Esp::IsEnabled() ? 1 : 0) << "\n";
+        f << "esp.team_check=" << (Esp::IsTeamCheck() ? 1 : 0) << "\n";
+        f << "esp.box_enabled=" << (Esp::IsBoxEnabled() ? 1 : 0) << "\n";
+        f << "esp.box_style=" << Esp::GetBoxStyle() << "\n";
+        f << "esp.box_fill=" << (Esp::IsBoxFillEnabled() ? 1 : 0) << "\n";
+        f << "esp.box_outline=" << (Esp::IsBoxOutlineEnabled() ? 1 : 0) << "\n";
+        f << "esp.box_corner_length=" << Esp::GetBoxCornerLength() << "\n";
+        const float* vc = Esp::GetBoxVisibleColor();
+        f << "esp.box_visible_r=" << vc[0] << "\n";
+        f << "esp.box_visible_g=" << vc[1] << "\n";
+        f << "esp.box_visible_b=" << vc[2] << "\n";
+        f << "esp.box_visible_a=" << vc[3] << "\n";
+        const float* fc = Esp::GetBoxFillColor();
+        f << "esp.box_fill_r=" << fc[0] << "\n";
+        f << "esp.box_fill_g=" << fc[1] << "\n";
+        f << "esp.box_fill_b=" << fc[2] << "\n";
+        f << "esp.box_fill_a=" << fc[3] << "\n";
+
         f << "removals.flash=" << (Removals::IsFlashEnabled() ? 1 : 0) << "\n";
 
         f << "world.skybox_enabled=" << (Skybox::IsEnabled() ? 1 : 0) << "\n";
@@ -121,6 +140,17 @@ namespace ConfigManager {
         bool chamsOccluded = false;
         bool chamsTeamCheck = false;
         float chamsColor[4] = { 0.0f, 1.0f, 0.4f, 1.0f };
+
+        bool espEnabled = true;
+        bool espTeamCheck = true;
+        bool espBoxEnabled = true;
+        int espBoxStyle = 1;
+        bool espBoxFill = false;
+        bool espBoxOutline = true;
+        float espBoxCornerLength = 8.0f;
+        float espBoxVisible[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+        float espBoxFillColor[4] = { 0.659f, 0.333f, 0.969f, 0.25f };
+
         bool removalsFlash = false;
         bool skyboxEnabled = false;
         int skyboxIndex = 0;
@@ -154,6 +184,23 @@ namespace ConfigManager {
             else if (key == "chams.color_g") chamsColor[1] = ParseFloat(val, chamsColor[1]);
             else if (key == "chams.color_b") chamsColor[2] = ParseFloat(val, chamsColor[2]);
             else if (key == "chams.color_a") chamsColor[3] = ParseFloat(val, chamsColor[3]);
+
+            else if (key == "esp.enabled") espEnabled = ParseBool(val);
+            else if (key == "esp.team_check") espTeamCheck = ParseBool(val);
+            else if (key == "esp.box_enabled") espBoxEnabled = ParseBool(val);
+            else if (key == "esp.box_style") espBoxStyle = ParseInt(val, espBoxStyle);
+            else if (key == "esp.box_fill") espBoxFill = ParseBool(val);
+            else if (key == "esp.box_outline") espBoxOutline = ParseBool(val);
+            else if (key == "esp.box_corner_length") espBoxCornerLength = ParseFloat(val, espBoxCornerLength);
+            else if (key == "esp.box_visible_r") espBoxVisible[0] = ParseFloat(val, espBoxVisible[0]);
+            else if (key == "esp.box_visible_g") espBoxVisible[1] = ParseFloat(val, espBoxVisible[1]);
+            else if (key == "esp.box_visible_b") espBoxVisible[2] = ParseFloat(val, espBoxVisible[2]);
+            else if (key == "esp.box_visible_a") espBoxVisible[3] = ParseFloat(val, espBoxVisible[3]);
+            else if (key == "esp.box_fill_r") espBoxFillColor[0] = ParseFloat(val, espBoxFillColor[0]);
+            else if (key == "esp.box_fill_g") espBoxFillColor[1] = ParseFloat(val, espBoxFillColor[1]);
+            else if (key == "esp.box_fill_b") espBoxFillColor[2] = ParseFloat(val, espBoxFillColor[2]);
+            else if (key == "esp.box_fill_a") espBoxFillColor[3] = ParseFloat(val, espBoxFillColor[3]);
+
             else if (key == "removals.flash") removalsFlash = ParseBool(val);
             else if (key == "world.skybox_enabled") skyboxEnabled = ParseBool(val);
             else if (key == "world.skybox_index") skyboxIndex = ParseInt(val, skyboxIndex);
@@ -173,6 +220,17 @@ namespace ConfigManager {
         Chams::SetOccluded(chamsOccluded);
         Chams::SetTeamCheck(chamsTeamCheck);
         Chams::SetColor(chamsColor);
+
+        Esp::SetEnabled(espEnabled);
+        Esp::SetTeamCheck(espTeamCheck);
+        Esp::SetBoxEnabled(espBoxEnabled);
+        Esp::SetBoxStyle(espBoxStyle);
+        Esp::SetBoxFillEnabled(espBoxFill);
+        Esp::SetBoxOutlineEnabled(espBoxOutline);
+        Esp::SetBoxCornerLength(espBoxCornerLength);
+        Esp::SetBoxVisibleColor(espBoxVisible);
+        Esp::SetBoxFillColor(espBoxFillColor);
+
         Removals::SetFlashEnabled(removalsFlash);
         Skybox::SetEnabled(skyboxEnabled);
         Skybox::SetSelectedIndex(skyboxIndex);

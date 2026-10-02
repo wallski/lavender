@@ -8,6 +8,7 @@
 #include "imgui_impl_win32.h"
 #include "../core/features/visuals/chams/Chams.h"
 #include "../core/features/visuals/chams/Materials.h"
+#include "../core/features/visuals/esp/Esp.h"
 #include "../core/features/visuals/removals/Removals.h"
 #include "../core/features/visuals/skybox/Skybox.h"
 #include "../core/features/combat/CombatShared.h"
@@ -33,6 +34,9 @@ namespace Renderer {
     static int                     g_menuKey = VK_DELETE;
     static bool                    g_unloadRequested = false;
     static bool                    g_readyToUnload = false;
+
+    static int g_visualsSubTab = 0;
+    static const char* kVisualsSubTabs[] = { "Chams", "ESP", "Info" };
 
     typedef int (*SDL_SetWindowRelativeMouseMode_t)(void*, int);
     typedef void* (*SDL_GetGrabbedWindow_t)();
@@ -309,7 +313,7 @@ namespace Renderer {
         Widgets::EndCard();
     }
 
-    static void DrawVisualsTab() {
+    static void DrawChamsCard() {
         bool enabled = Chams::IsEnabled();
         float* cur = Chams::GetColor();
         float color[4] = { cur[0], cur[1], cur[2], cur[3] };
@@ -319,7 +323,7 @@ namespace Renderer {
 
         Widgets::BeginCard("CHAMS", 5);
 
-        if (Widgets::Toggle("Chams", &enabled)) {
+        if (Widgets::Toggle("Enabled", &enabled)) {
             Chams::SetEnabled(enabled);
         }
         if (Widgets::ColorPicker("Color", color)) {
@@ -336,6 +340,126 @@ namespace Renderer {
         }
 
         Widgets::EndCard();
+    }
+
+    static void DrawEspCard() {
+        bool espEnabled = Esp::IsEnabled();
+        bool espTeamCheck = Esp::IsTeamCheck();
+
+        Widgets::BeginCard("GENERAL", 2);
+        if (Widgets::Toggle("Enabled", &espEnabled)) {
+            Esp::SetEnabled(espEnabled);
+        }
+        if (Widgets::Toggle("Team check", &espTeamCheck)) {
+            Esp::SetTeamCheck(espTeamCheck);
+        }
+        Widgets::EndCard();
+    }
+
+    static void DrawEspBoxCard() {
+        bool boxEnabled = Esp::IsBoxEnabled();
+        int boxStyle = Esp::GetBoxStyle();
+        bool boxFill = Esp::IsBoxFillEnabled();
+        bool boxOutline = Esp::IsBoxOutlineEnabled();
+        float cornerLen = Esp::GetBoxCornerLength();
+        float visibleColor[4];
+        float fillColor[4];
+        memcpy(visibleColor, Esp::GetBoxVisibleColor(), sizeof(visibleColor));
+        memcpy(fillColor, Esp::GetBoxFillColor(), sizeof(fillColor));
+
+        int rows = 5;
+        if (boxStyle == 1) rows++;
+        if (boxFill) rows++;
+
+        Widgets::BeginCard("BOX", rows);
+
+        if (Widgets::Toggle("Box", &boxEnabled)) {
+            Esp::SetBoxEnabled(boxEnabled);
+        }
+
+        const char* styles[] = { "Full", "Corner" };
+        if (ImGui::Combo("Style", &boxStyle, styles, IM_ARRAYSIZE(styles))) {
+            Esp::SetBoxStyle(boxStyle);
+        }
+
+        if (Widgets::Toggle("Outline", &boxOutline)) {
+            Esp::SetBoxOutlineEnabled(boxOutline);
+        }
+
+        if (boxStyle == 1) {
+            if (Widgets::SliderFloat("Corner length", &cornerLen, 1.0f, 30.0f, "%.0f")) {
+                Esp::SetBoxCornerLength(cornerLen);
+            }
+        }
+
+        if (Widgets::Toggle("Fill", &boxFill)) {
+            Esp::SetBoxFillEnabled(boxFill);
+        }
+
+        if (boxFill) {
+            if (Widgets::ColorPicker("Fill color", fillColor)) {
+                Esp::SetBoxFillColor(fillColor);
+            }
+        }
+
+        if (Widgets::ColorPicker("Box color", visibleColor)) {
+            Esp::SetBoxVisibleColor(visibleColor);
+        }
+
+        Widgets::EndCard();
+    }
+
+    static void DrawSubTabBar(const char* const* names, int count, int* current) {
+        ImGui::Dummy(ImVec2(0, 2));
+        for (int i = 0; i < count; i++) {
+            Widgets::TopTab(names[i], current, i);
+        }
+        ImGui::NewLine();
+
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        const float w = ImGui::GetContentRegionAvail().x;
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(p.x, p.y - 6.0f),
+            ImVec2(p.x + w, p.y - 6.0f),
+            ImGui::GetColorU32(Style::Border), 1.0f);
+
+        ImGui::Dummy(ImVec2(0, 8));
+    }
+
+    static void DrawEspSubTab() {
+        const float totalW = ImGui::GetContentRegionAvail().x;
+        const float gap = 10.0f;
+        const float colW = (totalW - gap) * 0.5f;
+
+        ImGui::BeginChild("##esp_col_left", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        DrawEspCard();
+        ImGui::EndChild();
+
+        ImGui::SameLine(0, gap);
+
+        ImGui::BeginChild("##esp_col_right", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        DrawEspBoxCard();
+        ImGui::EndChild();
+    }
+
+    static void DrawInfoSubTab() {
+        ImGui::Dummy(ImVec2(0, 12));
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Style::RowInnerPad);
+        ImGui::PushStyleColor(ImGuiCol_Text, Style::TextDim);
+        ImGui::TextUnformatted("health, ammo and name will live here");
+        ImGui::PopStyleColor();
+    }
+
+    static void DrawVisualsTab() {
+        DrawSubTabBar(kVisualsSubTabs, IM_ARRAYSIZE(kVisualsSubTabs), &g_visualsSubTab);
+
+        switch (g_visualsSubTab) {
+        case 0: DrawChamsCard();    break;
+        case 1: DrawEspSubTab();    break;
+        case 2: DrawInfoSubTab();   break;
+        }
     }
 
     static void DrawWorldTab() {
@@ -637,6 +761,7 @@ namespace Renderer {
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
+        Esp::Render();
         DrawMenu();
 
         ImGui::Render();

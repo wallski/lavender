@@ -10,7 +10,6 @@ static volatile LONG g_occluded = 0;
 static float g_color[4] = { 0.0f, 1.0f, 0.4f, 1.0f };
 static uintptr_t g_entityListGlobal = 0;
 static uintptr_t g_localPawnGlobal = 0;
-static volatile LONG64 g_tintCount = 0;
 
 namespace Chams {
 
@@ -111,9 +110,6 @@ namespace Chams {
         g_color[3] = color[3];
     }
 
-    int64_t GetTintCount() { return g_tintCount; }
-    int64_t GetScannedCount() { return g_tintCount; }
-
     void ApplyLodOverride() {
         struct Entry {
             const char* name;
@@ -133,14 +129,7 @@ namespace Chams {
 
         for (const auto& e : floatCvars) {
             CConVar* c = CVar::Find(e.name);
-            if (!c) {
-                printf("[Chams] cvar %s NOT FOUND\n", e.name);
-                continue;
-            }
-            float before = c->Get<float>();
-            c->Set(e.value);
-            float after = c->Get<float>();
-            printf("[Chams] %s %.3f -> %.3f\n", e.name, before, after);
+            if (c) c->Set(e.value);
         }
 
         const Entry intCvars[] = {
@@ -162,17 +151,8 @@ namespace Chams {
 
         for (const auto& e : intCvars) {
             CConVar* c = CVar::Find(e.name);
-            if (!c) {
-                printf("[Chams] cvar %s NOT FOUND\n", e.name);
-                continue;
-            }
-            int before = c->Get<int>();
-            c->Set((int)e.value);
-            int after = c->Get<int>();
-            printf("[Chams] %s %d -> %d\n", e.name, before, after);
+            if (c) c->Set((int)e.value);
         }
-
-        fflush(stdout);
     }
 
     void OnSortCall(void* array, uint32_t count) {
@@ -191,8 +171,6 @@ namespace Chams {
         if (g_teamCheck != 0 && localPawn) {
             localTeam = __TryReadInt(localPawn + OffsetConfig::fields.m_iTeamNum);
         }
-
-        int64_t tinted = 0;
 
         for (uint32_t i = 0; i < count; i++) {
             uintptr_t prim = arr + (uintptr_t)i * 0x70;
@@ -220,11 +198,6 @@ namespace Chams {
                 __TryWritePtr(prim + 0x28, material);
             }
             __TryWriteU32(prim + 0x50, packed);
-            tinted++;
-        }
-
-        if (tinted > 0) {
-            InterlockedAdd64(&g_tintCount, tinted);
         }
     }
 }
