@@ -163,7 +163,7 @@ void MainThread(HMODULE hModule) {
 
     Log("[Materials] Initializing...\n");
     if (!Materials::Initialize()) {
-        Log("[Materials] Init failed - chams won't render through walls\n");
+        Log("[Materials] Init failed\n");
     }
     else {
         Log("[Materials] Loaded successfully\n");
@@ -172,14 +172,14 @@ void MainThread(HMODULE hModule) {
     PresentHook::Initialize();
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
-    Log("[SortHook] Scanning for sort_primitives pattern...\n");
+    Log("[SortHook] Scanning...\n");
     const char* pattern = "45 85 C9 0F 84 ? ? ? ? 55 56 57 48 83 EC 30";
     uintptr_t fn = Memory::FindPattern("scenesystem.dll", pattern);
     if (!fn) {
         Log("[SortHook] pattern not found\n");
     }
     else {
-        Log("[SortHook] pattern matched at 0x%llX\n", (unsigned long long)fn);
+        Log("[SortHook] matched at 0x%llX\n", (unsigned long long)fn);
         g_sortFn = fn;
         if (InstallSortHook(fn)) Log("[SortHook] hook installed\n");
         else Log("[SortHook] hook install failed\n");

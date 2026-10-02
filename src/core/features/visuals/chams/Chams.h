@@ -9,21 +9,14 @@ namespace Chams {
     bool IsEnabled();
     void SetEnabled(bool enabled);
 
-    bool IsVisibleEnabled();
-    void SetVisibleEnabled(bool enabled);
+    Materials::Id GetMaterial();
+    void SetMaterial(Materials::Id id);
 
-    bool IsOccludedEnabled();
-    void SetOccludedEnabled(bool enabled);
+    bool IsOccluded();
+    void SetOccluded(bool occluded);
 
-    float* GetVisibleColor();
-    float* GetOccludedColor();
-    void SetVisibleColor(const float color[4]);
-    void SetOccludedColor(const float color[4]);
-
-    Materials::Id GetVisibleMaterial();
-    Materials::Id GetOccludedMaterial();
-    void SetVisibleMaterial(Materials::Id id);
-    void SetOccludedMaterial(Materials::Id id);
+    float* GetColor();
+    void SetColor(const float color[4]);
 
     void OnSortCall(void* array, uint32_t count);
 

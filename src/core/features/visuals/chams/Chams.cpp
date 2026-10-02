@@ -2,12 +2,9 @@
 #include "Chams.h"
 
 static volatile LONG g_enabled = 0;
-static volatile LONG g_visibleEnabled = 1;
-static volatile LONG g_occludedEnabled = 1;
-static float g_visibleColor[4] = { 1.0f, 0.0f, 0.0f, 1.0f };
-static float g_occludedColor[4] = { 1.0f, 0.0f, 0.6f, 1.0f };
-static volatile LONG g_visibleMaterial = (LONG)Materials::Id::Flat;
-static volatile LONG g_occludedMaterial = (LONG)Materials::Id::FlatIgnoreZ;
+static volatile LONG g_material = (LONG)Materials::Id::Flat;
+static volatile LONG g_occluded = 0;
+static float g_color[4] = { 0.0f, 1.0f, 0.4f, 1.0f };
 static uintptr_t g_entityListGlobal = 0;
 static uintptr_t g_localPawnGlobal = 0;
 static volatile LONG64 g_tintCount = 0;
@@ -74,40 +71,35 @@ namespace Chams {
         return (uint32_t)r | ((uint32_t)g << 8) | ((uint32_t)b << 16) | ((uint32_t)a << 24);
     }
 
+    static Materials::Id ResolveMaterial() {
+        const int base = (int)g_material;
+        if (base <= 0 || base > 5) return Materials::Id::None;
+        if (g_occluded != 0) {
+            return (Materials::Id)(base + 5);
+        }
+        return (Materials::Id)base;
+    }
+
     void SetEntityListGlobal(uintptr_t addr) { g_entityListGlobal = addr; }
     void SetLocalPawnGlobal(uintptr_t addr) { g_localPawnGlobal = addr; }
 
     bool IsEnabled() { return g_enabled != 0; }
     void SetEnabled(bool enabled) { InterlockedExchange(&g_enabled, enabled ? 1 : 0); }
 
-    bool IsVisibleEnabled() { return g_visibleEnabled != 0; }
-    void SetVisibleEnabled(bool enabled) { InterlockedExchange(&g_visibleEnabled, enabled ? 1 : 0); }
+    Materials::Id GetMaterial() { return (Materials::Id)g_material; }
+    void SetMaterial(Materials::Id id) { InterlockedExchange(&g_material, (LONG)id); }
 
-    bool IsOccludedEnabled() { return g_occludedEnabled != 0; }
-    void SetOccludedEnabled(bool enabled) { InterlockedExchange(&g_occludedEnabled, enabled ? 1 : 0); }
+    bool IsOccluded() { return g_occluded != 0; }
+    void SetOccluded(bool occluded) { InterlockedExchange(&g_occluded, occluded ? 1 : 0); }
 
-    float* GetVisibleColor() { return g_visibleColor; }
-    float* GetOccludedColor() { return g_occludedColor; }
+    float* GetColor() { return g_color; }
 
-    void SetVisibleColor(const float color[4]) {
-        g_visibleColor[0] = color[0];
-        g_visibleColor[1] = color[1];
-        g_visibleColor[2] = color[2];
-        g_visibleColor[3] = color[3];
+    void SetColor(const float color[4]) {
+        g_color[0] = color[0];
+        g_color[1] = color[1];
+        g_color[2] = color[2];
+        g_color[3] = color[3];
     }
-
-    void SetOccludedColor(const float color[4]) {
-        g_occludedColor[0] = color[0];
-        g_occludedColor[1] = color[1];
-        g_occludedColor[2] = color[2];
-        g_occludedColor[3] = color[3];
-    }
-
-    Materials::Id GetVisibleMaterial() { return (Materials::Id)g_visibleMaterial; }
-    Materials::Id GetOccludedMaterial() { return (Materials::Id)g_occludedMaterial; }
-
-    void SetVisibleMaterial(Materials::Id id) { InterlockedExchange(&g_visibleMaterial, (LONG)id); }
-    void SetOccludedMaterial(Materials::Id id) { InterlockedExchange(&g_occludedMaterial, (LONG)id); }
 
     int64_t GetTintCount() { return g_tintCount; }
     int64_t GetScannedCount() { return g_scannedCount; }
@@ -117,15 +109,9 @@ namespace Chams {
         uintptr_t arr = (uintptr_t)array;
         if (arr < 0x10000) return;
 
-        const bool visibleEnabled = g_visibleEnabled != 0;
-        const bool occludedEnabled = g_occludedEnabled != 0;
-        if (!visibleEnabled && !occludedEnabled) return;
-
-        const uintptr_t visibleMat = Materials::Get((Materials::Id)g_visibleMaterial);
-        const uintptr_t occludedMat = Materials::Get((Materials::Id)g_occludedMaterial);
-
-        const uint32_t visiblePacked = PackColor(g_visibleColor);
-        const uint32_t occludedPacked = PackColor(g_occludedColor);
+        const Materials::Id resolved = ResolveMaterial();
+        const uintptr_t material = Materials::Get(resolved);
+        const uint32_t packed = PackColor(g_color);
 
         uintptr_t localPawn = __TryReadPtr(g_localPawnGlobal);
         uint32_t maxCheck = count > 300 ? 300 : count;
@@ -147,26 +133,11 @@ namespace Chams {
             if (name[0] != 'C') continue;
             if (strcmp(name, "C_CSPlayerPawn") != 0) continue;
 
-            uintptr_t chosenMaterial = 0;
-            uint32_t chosenPacked = 0;
-
-            if (occludedEnabled) {
-                if (occludedMat) chosenMaterial = occludedMat;
-                chosenPacked = occludedPacked;
+            if (material) {
+                __TryWritePtr(prim + 0x20, material);
+                __TryWritePtr(prim + 0x28, material);
             }
-            else if (visibleEnabled) {
-                if (visibleMat) chosenMaterial = visibleMat;
-                chosenPacked = visiblePacked;
-            }
-            else {
-                continue;
-            }
-
-            if (chosenMaterial) {
-                __TryWritePtr(prim + 0x20, chosenMaterial);
-                __TryWritePtr(prim + 0x28, chosenMaterial);
-            }
-            __TryWriteU32(prim + 0x50, chosenPacked);
+            __TryWriteU32(prim + 0x50, packed);
             InterlockedIncrement64(&g_tintCount);
         }
     }

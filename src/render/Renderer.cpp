@@ -28,12 +28,19 @@ namespace Renderer {
     static bool                    g_unloadRequested = false;
     static bool                    g_readyToUnload = false;
 
-    static bool                    g_lastAppliedMenuOpen = true;
-    static bool                    g_hasSavedRelativeMouse = false;
-    static uint8_t                 g_savedRelativeMouse = 1;
-    static bool                    g_hasSavedCursor = false;
-    static int                     g_savedCursorX = 0;
-    static int                     g_savedCursorY = 0;
+    typedef int (*SDL_SetWindowRelativeMouseMode_t)(void*, int);
+    typedef void* (*SDL_GetGrabbedWindow_t)();
+    typedef void* (*SDL_GetKeyboardFocus_t)();
+
+    static SDL_SetWindowRelativeMouseMode_t pSDL_SetWindowRelativeMouseMode = nullptr;
+    static SDL_GetGrabbedWindow_t           pSDL_GetGrabbedWindow = nullptr;
+    static SDL_GetKeyboardFocus_t           pSDL_GetKeyboardFocus = nullptr;
+
+    static bool g_sdlInitialized = false;
+    static bool g_firstFrame = true;
+    static bool g_prevMenuOpen = true;
+    static bool g_hasSavedInputSystem = false;
+    static uint8_t g_savedInputSystemRelative = 1;
 
     static bool IsValidPointer(uintptr_t p) {
         return p >= 0x10000 && p <= 0x00007FFFFFFFFFFF;
@@ -48,10 +55,38 @@ namespace Renderer {
         return CallWindowProcA(g_originalWndProc, hWnd, msg, wParam, lParam);
     }
 
-    static void ApplyMenuState(bool menuOpen) {
-        if (menuOpen == g_lastAppliedMenuOpen) return;
-        g_lastAppliedMenuOpen = menuOpen;
+    static void InitSDL() {
+        if (g_sdlInitialized) return;
+        g_sdlInitialized = true;
 
+        HMODULE sdl = GetModuleHandleA("SDL3.dll");
+        if (!sdl) sdl = LoadLibraryA("SDL3.dll");
+        if (!sdl) {
+            printf("[Renderer] SDL3.dll not loaded\n");
+            return;
+        }
+
+        pSDL_SetWindowRelativeMouseMode = (SDL_SetWindowRelativeMouseMode_t)
+            GetProcAddress(sdl, "SDL_SetWindowRelativeMouseMode");
+        pSDL_GetGrabbedWindow = (SDL_GetGrabbedWindow_t)
+            GetProcAddress(sdl, "SDL_GetGrabbedWindow");
+        pSDL_GetKeyboardFocus = (SDL_GetKeyboardFocus_t)
+            GetProcAddress(sdl, "SDL_GetKeyboardFocus");
+
+        printf("[Renderer] SDL set=%p grabbed=%p focus=%p\n",
+            (void*)pSDL_SetWindowRelativeMouseMode,
+            (void*)pSDL_GetGrabbedWindow,
+            (void*)pSDL_GetKeyboardFocus);
+    }
+
+    static void* GetSDLWindow() {
+        void* sdlWindow = nullptr;
+        if (pSDL_GetGrabbedWindow) sdlWindow = pSDL_GetGrabbedWindow();
+        if (!sdlWindow && pSDL_GetKeyboardFocus) sdlWindow = pSDL_GetKeyboardFocus();
+        return sdlWindow;
+    }
+
+    static void SetInputSystemRelative(bool relative) {
         if (!OffsetConfig::globals.dwInputSystem) return;
 
         __try {
@@ -65,45 +100,79 @@ namespace Renderer {
             if (!IsValidPointer(fnAddr)) return;
 
             auto setRelMouse = reinterpret_cast<void(*)(void*, bool)>(fnAddr);
-
-            if (menuOpen) {
-                g_savedRelativeMouse = *reinterpret_cast<uint8_t*>(instance + 84);
-                g_hasSavedRelativeMouse = true;
-                setRelMouse(reinterpret_cast<void*>(instance), false);
-
-                if (g_hasSavedCursor) {
-                    const auto vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
-                    const auto vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
-                    const auto vw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
-                    const auto vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
-                    const auto x = std::clamp(g_savedCursorX, vx, vx + std::max(1, vw) - 1);
-                    const auto y = std::clamp(g_savedCursorY, vy, vy + std::max(1, vh) - 1);
-                    SetCursorPos(x, y);
-                }
-                else if (g_window) {
-                    RECT rect;
-                    GetWindowRect(g_window, &rect);
-                    SetCursorPos((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
-                }
-                SetCursor(LoadCursor(nullptr, IDC_ARROW));
-            }
-            else {
-                if (!g_hasSavedRelativeMouse) {
-                    g_savedRelativeMouse = *reinterpret_cast<uint8_t*>(instance + 84);
-                    g_hasSavedRelativeMouse = true;
-                }
-
-                POINT pt;
-                if (GetCursorPos(&pt)) {
-                    g_savedCursorX = pt.x;
-                    g_savedCursorY = pt.y;
-                    g_hasSavedCursor = true;
-                }
-
-                setRelMouse(reinterpret_cast<void*>(instance), g_savedRelativeMouse != 0);
-            }
+            setRelMouse(reinterpret_cast<void*>(instance), relative);
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
+    }
+
+    static void SaveInputSystemState() {
+        if (!OffsetConfig::globals.dwInputSystem) return;
+        __try {
+            uintptr_t instance = OffsetConfig::globals.dwInputSystem;
+            if (!IsValidPointer(instance)) return;
+            g_savedInputSystemRelative = *reinterpret_cast<uint8_t*>(instance + 84);
+            g_hasSavedInputSystem = true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
+    }
+
+    static void ForceMouseUnlock() {
+        void* sdlWindow = GetSDLWindow();
+        if (sdlWindow && pSDL_SetWindowRelativeMouseMode) {
+            pSDL_SetWindowRelativeMouseMode(sdlWindow, 0);
+        }
+
+        SetInputSystemRelative(false);
+
+        ClipCursor(nullptr);
+        while (ShowCursor(TRUE) < 0) {}
+        SetCursor(LoadCursor(nullptr, IDC_ARROW));
+    }
+
+    static void ForceMouseRestore() {
+        void* sdlWindow = GetSDLWindow();
+        if (sdlWindow && pSDL_SetWindowRelativeMouseMode) {
+            pSDL_SetWindowRelativeMouseMode(sdlWindow, 1);
+        }
+
+        SetInputSystemRelative(g_hasSavedInputSystem ? (g_savedInputSystemRelative != 0) : true);
+
+        if (g_window) {
+            RECT rect;
+            GetWindowRect(g_window, &rect);
+            ClipCursor(&rect);
+            SetCursorPos((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+        }
+        while (ShowCursor(FALSE) >= 0) {}
+    }
+
+    static void UpdateMouseState() {
+        InitSDL();
+
+        if (g_firstFrame) {
+            g_firstFrame = false;
+            g_prevMenuOpen = g_menuOpen;
+            if (g_menuOpen) {
+                SaveInputSystemState();
+            }
+            if (g_menuOpen) ForceMouseUnlock();
+            return;
+        }
+
+        if (g_menuOpen != g_prevMenuOpen) {
+            if (g_menuOpen) {
+                SaveInputSystemState();
+                ForceMouseUnlock();
+            }
+            else {
+                ForceMouseRestore();
+            }
+            g_prevMenuOpen = g_menuOpen;
+        }
+
+        if (g_menuOpen) {
+            ForceMouseUnlock();
+        }
     }
 
     static void CreateRenderTarget() {
@@ -124,9 +193,11 @@ namespace Renderer {
 
     static const char* kMaterialNames[] = {
         "None",
-        "Matte", "Flat", "Glow", "Outlines", "Bloom",
-        "Matte (ignorez)", "Flat (ignorez)", "Glow (ignorez)",
-        "Outlines (ignorez)", "Bloom (ignorez)"
+        "Matte",
+        "Flat",
+        "Glow",
+        "Outlines",
+        "Bloom"
     };
 
     static void DrawLegitTab() {
@@ -138,60 +209,32 @@ namespace Renderer {
         Widgets::SectionHeader("Chams");
 
         bool enabled = Chams::IsEnabled();
-        if (Widgets::Toggle("Enabled", &enabled)) {
+        if (Widgets::Toggle("Chams", &enabled)) {
             Chams::SetEnabled(enabled);
         }
 
-        Widgets::SectionHeader("Visible");
-
-        bool visEnabled = Chams::IsVisibleEnabled();
-        if (Widgets::Toggle("Visible enabled", &visEnabled)) {
-            Chams::SetVisibleEnabled(visEnabled);
-        }
-
         {
-            float visColor[4];
-            float* cur = Chams::GetVisibleColor();
-            visColor[0] = cur[0];
-            visColor[1] = cur[1];
-            visColor[2] = cur[2];
-            visColor[3] = cur[3];
-            if (Widgets::ColorPicker("Visible color", visColor)) {
-                Chams::SetVisibleColor(visColor);
+            float color[4];
+            float* cur = Chams::GetColor();
+            color[0] = cur[0];
+            color[1] = cur[1];
+            color[2] = cur[2];
+            color[3] = cur[3];
+            if (Widgets::ColorPicker("Color", color)) {
+                Chams::SetColor(color);
             }
         }
 
         {
-            int visMat = (int)Chams::GetVisibleMaterial();
-            if (ImGui::Combo("Visible material", &visMat, kMaterialNames, IM_ARRAYSIZE(kMaterialNames))) {
-                Chams::SetVisibleMaterial((Materials::Id)visMat);
+            int mat = (int)Chams::GetMaterial();
+            if (ImGui::Combo("Material", &mat, kMaterialNames, IM_ARRAYSIZE(kMaterialNames))) {
+                Chams::SetMaterial((Materials::Id)mat);
             }
         }
 
-        Widgets::SectionHeader("Occluded");
-
-        bool occEnabled = Chams::IsOccludedEnabled();
-        if (Widgets::Toggle("Occluded enabled", &occEnabled)) {
-            Chams::SetOccludedEnabled(occEnabled);
-        }
-
-        {
-            float occColor[4];
-            float* cur = Chams::GetOccludedColor();
-            occColor[0] = cur[0];
-            occColor[1] = cur[1];
-            occColor[2] = cur[2];
-            occColor[3] = cur[3];
-            if (Widgets::ColorPicker("Occluded color", occColor)) {
-                Chams::SetOccludedColor(occColor);
-            }
-        }
-
-        {
-            int occMat = (int)Chams::GetOccludedMaterial();
-            if (ImGui::Combo("Occluded material", &occMat, kMaterialNames, IM_ARRAYSIZE(kMaterialNames))) {
-                Chams::SetOccludedMaterial((Materials::Id)occMat);
-            }
+        bool occluded = Chams::IsOccluded();
+        if (Widgets::Toggle("Occluded", &occluded)) {
+            Chams::SetOccluded(occluded);
         }
     }
 
@@ -324,6 +367,8 @@ namespace Renderer {
 
         g_originalWndProc = (WNDPROC)SetWindowLongPtrA(g_window, GWLP_WNDPROC, (LONG_PTR)hkWndProc);
 
+        InitSDL();
+
         g_initialized = true;
         g_alpha = 0.0f;
         printf("[Renderer] ImGui initialized\n"); fflush(stdout);
@@ -337,7 +382,7 @@ namespace Renderer {
             g_menuOpen = !g_menuOpen;
         }
 
-        ApplyMenuState(g_menuOpen);
+        UpdateMouseState();
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -353,6 +398,10 @@ namespace Renderer {
     void Shutdown() {
         if (!g_initialized) return;
         g_initialized = false;
+
+        if (!g_prevMenuOpen) {
+            ForceMouseRestore();
+        }
 
         if (g_originalWndProc && g_window) {
             SetWindowLongPtrA(g_window, GWLP_WNDPROC, (LONG_PTR)g_originalWndProc);
