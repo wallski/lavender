@@ -8,6 +8,7 @@
 #include "imgui_impl_win32.h"
 #include "../core/features/visuals/chams/Chams.h"
 #include "../core/features/visuals/chams/Materials.h"
+#include "../core/hooks/InlineHook.h"
 #include "../config/OffsetConfig.h"
 
 LRESULT WINAPI ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -31,10 +32,15 @@ namespace Renderer {
     typedef int (*SDL_SetWindowRelativeMouseMode_t)(void*, int);
     typedef void* (*SDL_GetGrabbedWindow_t)();
     typedef void* (*SDL_GetKeyboardFocus_t)();
+    typedef uint32_t(*SDL_GetRelativeMouseState_t)(float*, float*);
 
     static SDL_SetWindowRelativeMouseMode_t pSDL_SetWindowRelativeMouseMode = nullptr;
     static SDL_GetGrabbedWindow_t           pSDL_GetGrabbedWindow = nullptr;
     static SDL_GetKeyboardFocus_t           pSDL_GetKeyboardFocus = nullptr;
+
+    static InlineHook g_sdlGetRelHook;
+    static SDL_GetRelativeMouseState_t o_SDL_GetRelativeMouseState = nullptr;
+    static bool g_sdlGetRelHookInstalled = false;
 
     static bool g_sdlInitialized = false;
     static bool g_firstFrame = true;
@@ -44,6 +50,18 @@ namespace Renderer {
 
     static bool IsValidPointer(uintptr_t p) {
         return p >= 0x10000 && p <= 0x00007FFFFFFFFFFF;
+    }
+
+    static uint32_t hkSDL_GetRelativeMouseState(float* x, float* y) {
+        if (g_menuOpen) {
+            if (x) *x = 0.0f;
+            if (y) *y = 0.0f;
+            return 0;
+        }
+        if (o_SDL_GetRelativeMouseState) {
+            return o_SDL_GetRelativeMouseState(x, y);
+        }
+        return 0;
     }
 
     static LRESULT CALLBACK hkWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -77,6 +95,22 @@ namespace Renderer {
             (void*)pSDL_SetWindowRelativeMouseMode,
             (void*)pSDL_GetGrabbedWindow,
             (void*)pSDL_GetKeyboardFocus);
+
+        void* getRelFn = GetProcAddress(sdl, "SDL_GetRelativeMouseState");
+        printf("[Renderer] SDL_GetRelativeMouseState = %p\n", getRelFn);
+
+        if (getRelFn) {
+            o_SDL_GetRelativeMouseState = (SDL_GetRelativeMouseState_t)getRelFn;
+            if (g_sdlGetRelHook.Install(getRelFn, (void*)hkSDL_GetRelativeMouseState)) {
+                g_sdlGetRelHookInstalled = true;
+                o_SDL_GetRelativeMouseState =
+                    g_sdlGetRelHook.CallOriginal<SDL_GetRelativeMouseState_t>();
+                printf("[Renderer] SDL_GetRelativeMouseState hooked\n");
+            }
+            else {
+                printf("[Renderer] SDL_GetRelativeMouseState hook failed\n");
+            }
+        }
     }
 
     static void* GetSDLWindow() {
@@ -154,8 +188,8 @@ namespace Renderer {
             g_prevMenuOpen = g_menuOpen;
             if (g_menuOpen) {
                 SaveInputSystemState();
+                ForceMouseUnlock();
             }
-            if (g_menuOpen) ForceMouseUnlock();
             return;
         }
 
@@ -168,10 +202,6 @@ namespace Renderer {
                 ForceMouseRestore();
             }
             g_prevMenuOpen = g_menuOpen;
-        }
-
-        if (g_menuOpen) {
-            ForceMouseUnlock();
         }
     }
 
@@ -398,6 +428,11 @@ namespace Renderer {
     void Shutdown() {
         if (!g_initialized) return;
         g_initialized = false;
+
+        if (g_sdlGetRelHookInstalled) {
+            g_sdlGetRelHook.Remove();
+            g_sdlGetRelHookInstalled = false;
+        }
 
         if (!g_prevMenuOpen) {
             ForceMouseRestore();
