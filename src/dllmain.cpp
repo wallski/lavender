@@ -176,22 +176,9 @@ void MainThread(HMODULE hModule) {
         else Log("[SortHook] hook install failed\n");
     }
 
-    Log("[Chams] Ready. Toggle in the Players tab.\n");
-
-    ULONGLONG lastStats = GetTickCount64();
     while (!Renderer::ShouldUnload()) {
         if (GetAsyncKeyState(VK_END) & 1) Renderer::RequestUnload();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
-
-        ULONGLONG now = GetTickCount64();
-        if (now - lastStats >= 3000) {
-            Log("[Chams] sortCalls=%lld tinted=%lld scanned=%lld enabled=%d\n",
-                (long long)g_sortCallCount,
-                (long long)Chams::GetTintCount(),
-                (long long)Chams::GetScannedCount(),
-                Chams::IsEnabled() ? 1 : 0);
-            lastStats = now;
-        }
     }
 
     RestoreSortHook();

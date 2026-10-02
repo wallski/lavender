@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "OffsetConfig.h"
+#include "../core/memory/PatternScan.h"
 #include <fstream>
 #include <sstream>
 #include <cctype>
@@ -113,6 +114,7 @@ namespace OffsetConfig {
         if (ExtractJsonNumber(json, "dwViewMatrix", v)) globals.dwViewMatrix = (uintptr_t)v;
         if (ExtractJsonNumber(json, "dwGlobalVars", v)) globals.dwGlobalVars = (uintptr_t)v;
         if (ExtractJsonNumber(json, "dwGameRules", v)) globals.dwGameRules = (uintptr_t)v;
+        if (ExtractJsonNumber(json, "dwInputSystem", v)) globals.dwInputSystem = (uintptr_t)v;
 
         std::string hpp = ReadWholeFile(hppPath);
         if (!hpp.empty()) {
@@ -136,12 +138,20 @@ namespace OffsetConfig {
         return h ? reinterpret_cast<uintptr_t>(h) : 0;
     }
 
+    static uintptr_t ResolveMovRip(const char* module, const char* pattern) {
+        uintptr_t instr = Memory::FindPattern(module, pattern);
+        if (!instr) return 0;
+        int32_t rel = *reinterpret_cast<int32_t*>(instr + 3);
+        return instr + 7 + rel;
+    }
+
     void Resolve() {
         uintptr_t clientBase = GetModuleBase("client.dll");
         uintptr_t engineBase = GetModuleBase("engine2.dll");
+        uintptr_t inputBase = GetModuleBase("inputsystem.dll");
 
-        printf("[OffsetConfig] Resolving RVAs (client=0x%llX engine=0x%llX)\n",
-            (unsigned long long)clientBase, (unsigned long long)engineBase); fflush(stdout);
+        printf("[OffsetConfig] Resolving RVAs (client=0x%llX engine=0x%llX input=0x%llX)\n",
+            (unsigned long long)clientBase, (unsigned long long)engineBase, (unsigned long long)inputBase); fflush(stdout);
 
         globals.dwEntityList += clientBase;
         globals.dwLocalPlayerController += clientBase;
@@ -149,6 +159,14 @@ namespace OffsetConfig {
         globals.dwViewMatrix += clientBase;
         globals.dwGameRules += clientBase;
         globals.dwGlobalVars += engineBase;
+        globals.dwInputSystem += inputBase;
+
+        if (!globals.dwInputSystem) {
+            globals.dwInputSystem = ResolveMovRip("inputsystem.dll", "48 8B 0D ? ? ? ? 48 8B 01 FF 50");
+            if (globals.dwInputSystem) {
+                printf("[OffsetConfig] dwInputSystem fallback resolved to 0x%llX\n", (unsigned long long)globals.dwInputSystem);
+            }
+        }
 
         printf("[OffsetConfig] Resolved absolute addresses:\n");
         printf("  dwEntityList            = 0x%llX\n", (unsigned long long)globals.dwEntityList);
@@ -157,6 +175,7 @@ namespace OffsetConfig {
         printf("  dwViewMatrix            = 0x%llX\n", (unsigned long long)globals.dwViewMatrix);
         printf("  dwGameRules             = 0x%llX\n", (unsigned long long)globals.dwGameRules);
         printf("  dwGlobalVars            = 0x%llX\n", (unsigned long long)globals.dwGlobalVars);
+        printf("  dwInputSystem           = 0x%llX\n", (unsigned long long)globals.dwInputSystem);
         fflush(stdout);
     }
 }

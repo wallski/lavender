@@ -10,6 +10,7 @@ namespace OffsetConfig {
         uintptr_t dwViewMatrix = 0;
         uintptr_t dwGlobalVars = 0;
         uintptr_t dwGameRules = 0;
+        uintptr_t dwInputSystem = 0;
     };
 
     struct Fields {

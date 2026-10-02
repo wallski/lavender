@@ -1,14 +1,13 @@
 #include "pch.h"
 #include "Renderer.h"
 #include "Style.h"
-
 #include "Widgets.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
 #include "../core/features/visuals/chams/Chams.h"
-
+#include "../config/OffsetConfig.h"
 
 LRESULT WINAPI ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -22,44 +21,88 @@ namespace Renderer {
     static WNDPROC                 g_originalWndProc = nullptr;
     static bool                    g_initialized = false;
     static bool                    g_menuOpen = true;
-    static bool                    g_mouseReleased = false;
     static float                   g_alpha = 0.0f;
     static int                     g_activeTab = 0;
     static int                     g_menuKey = VK_DELETE;
     static bool                    g_unloadRequested = false;
     static bool                    g_readyToUnload = false;
 
+    static bool                    g_lastAppliedMenuOpen = true;
+    static bool                    g_hasSavedRelativeMouse = false;
+    static uint8_t                 g_savedRelativeMouse = 1;
+    static bool                    g_hasSavedCursor = false;
+    static int                     g_savedCursorX = 0;
+    static int                     g_savedCursorY = 0;
+
+    static bool IsValidPointer(uintptr_t p) {
+        return p >= 0x10000 && p <= 0x00007FFFFFFFFFFF;
+    }
+
     static LRESULT CALLBACK hkWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (g_menuOpen) {
-            ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
+            if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) {
+                return TRUE;
+            }
         }
         return CallWindowProcA(g_originalWndProc, hWnd, msg, wParam, lParam);
     }
 
-    static void SetMouseReleased(bool released) {
-        if (released == g_mouseReleased) return;
-        g_mouseReleased = released;
+    static void ApplyMenuState(bool menuOpen) {
+        if (menuOpen == g_lastAppliedMenuOpen) return;
+        g_lastAppliedMenuOpen = menuOpen;
 
-        if (released) {
-            while (ShowCursor(TRUE) < 0) {}
-            ClipCursor(nullptr);
-        }
-        else {
-            while (ShowCursor(FALSE) >= 0) {}
-        }
+        if (!OffsetConfig::globals.dwInputSystem) return;
 
-        HMODULE sdl = GetModuleHandleA("SDL3.dll");
-        if (!sdl) sdl = LoadLibraryA("SDL3.dll");
-        if (sdl) {
-            using SetRelMouseFn = int(*)(int);
-            static SetRelMouseFn setRelMouse = nullptr;
-            if (!setRelMouse) {
-                setRelMouse = (SetRelMouseFn)GetProcAddress(sdl, "SDL_SetRelativeMouseMode");
+        __try {
+            uintptr_t instance = OffsetConfig::globals.dwInputSystem;
+            if (!IsValidPointer(instance)) return;
+
+            void** vtable = *reinterpret_cast<void***>(instance);
+            if (!IsValidPointer(reinterpret_cast<uintptr_t>(vtable))) return;
+
+            uintptr_t fnAddr = reinterpret_cast<uintptr_t>(vtable[76]);
+            if (!IsValidPointer(fnAddr)) return;
+
+            auto setRelMouse = reinterpret_cast<void(*)(void*, bool)>(fnAddr);
+
+            if (menuOpen) {
+                g_savedRelativeMouse = *reinterpret_cast<uint8_t*>(instance + 84);
+                g_hasSavedRelativeMouse = true;
+                setRelMouse(reinterpret_cast<void*>(instance), false);
+
+                if (g_hasSavedCursor) {
+                    const auto vx = GetSystemMetrics(SM_XVIRTUALSCREEN);
+                    const auto vy = GetSystemMetrics(SM_YVIRTUALSCREEN);
+                    const auto vw = GetSystemMetrics(SM_CXVIRTUALSCREEN);
+                    const auto vh = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+                    const auto x = std::clamp(g_savedCursorX, vx, vx + std::max(1, vw) - 1);
+                    const auto y = std::clamp(g_savedCursorY, vy, vy + std::max(1, vh) - 1);
+                    SetCursorPos(x, y);
+                }
+                else if (g_window) {
+                    RECT rect;
+                    GetWindowRect(g_window, &rect);
+                    SetCursorPos((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2);
+                }
+                SetCursor(LoadCursor(nullptr, IDC_ARROW));
             }
-            if (setRelMouse) {
-                setRelMouse(released ? 0 : 1);
+            else {
+                if (!g_hasSavedRelativeMouse) {
+                    g_savedRelativeMouse = *reinterpret_cast<uint8_t*>(instance + 84);
+                    g_hasSavedRelativeMouse = true;
+                }
+
+                POINT pt;
+                if (GetCursorPos(&pt)) {
+                    g_savedCursorX = pt.x;
+                    g_savedCursorY = pt.y;
+                    g_hasSavedCursor = true;
+                }
+
+                setRelMouse(reinterpret_cast<void*>(instance), g_savedRelativeMouse != 0);
             }
         }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
 
     static void CreateRenderTarget() {
@@ -242,7 +285,7 @@ namespace Renderer {
             g_menuOpen = !g_menuOpen;
         }
 
-        SetMouseReleased(g_menuOpen);
+        ApplyMenuState(g_menuOpen);
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -258,8 +301,6 @@ namespace Renderer {
     void Shutdown() {
         if (!g_initialized) return;
         g_initialized = false;
-
-        if (g_mouseReleased) SetMouseReleased(false);
 
         if (g_originalWndProc && g_window) {
             SetWindowLongPtrA(g_window, GWLP_WNDPROC, (LONG_PTR)g_originalWndProc);
