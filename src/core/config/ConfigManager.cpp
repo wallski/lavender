@@ -4,6 +4,7 @@
 #include "../features/visuals/chams/Materials.h"
 #include "../features/visuals/removals/Removals.h"
 #include "../features/visuals/skybox/Skybox.h"
+#include "../features/combat/legit/triggerbot/Triggerbot.h"
 #include "../../render/Renderer.h"
 #include "../../render/Style.h"
 #include <filesystem>
@@ -95,6 +96,11 @@ namespace ConfigManager {
         f << "world.skybox_enabled=" << (Skybox::IsEnabled() ? 1 : 0) << "\n";
         f << "world.skybox_index=" << Skybox::GetSelectedIndex() << "\n";
 
+        f << "trigger.enabled=" << (Triggerbot::IsEnabled() ? 1 : 0) << "\n";
+        f << "trigger.key=" << Triggerbot::GetKey() << "\n";
+        f << "trigger.head_only=" << (Triggerbot::GetHeadOnly() ? 1 : 0) << "\n";
+        f << "trigger.delay=" << Triggerbot::GetDelayMs() << "\n";
+
         f << "menu.key=" << Renderer::GetMenuKey() << "\n";
         f << "menu.accent_r=" << Style::Accent.x << "\n";
         f << "menu.accent_g=" << Style::Accent.y << "\n";
@@ -115,6 +121,10 @@ namespace ConfigManager {
         bool removalsFlash = false;
         bool skyboxEnabled = false;
         int skyboxIndex = 0;
+        bool triggerEnabled = false;
+        int triggerKey = VK_XBUTTON2;
+        bool triggerHeadOnly = true;
+        int triggerDelay = 50;
         int menuKey = VK_DELETE;
         float accent[3] = { Style::Accent.x, Style::Accent.y, Style::Accent.z };
 
@@ -142,6 +152,10 @@ namespace ConfigManager {
             else if (key == "removals.flash") removalsFlash = ParseBool(val);
             else if (key == "world.skybox_enabled") skyboxEnabled = ParseBool(val);
             else if (key == "world.skybox_index") skyboxIndex = ParseInt(val, skyboxIndex);
+            else if (key == "trigger.enabled") triggerEnabled = ParseBool(val);
+            else if (key == "trigger.key") triggerKey = ParseInt(val, triggerKey);
+            else if (key == "trigger.head_only") triggerHeadOnly = ParseBool(val);
+            else if (key == "trigger.delay") triggerDelay = ParseInt(val, triggerDelay);
             else if (key == "menu.key") menuKey = ParseInt(val, menuKey);
             else if (key == "menu.accent_r") accent[0] = ParseFloat(val, accent[0]);
             else if (key == "menu.accent_g") accent[1] = ParseFloat(val, accent[1]);
@@ -155,6 +169,10 @@ namespace ConfigManager {
         Removals::SetFlashEnabled(removalsFlash);
         Skybox::SetEnabled(skyboxEnabled);
         Skybox::SetSelectedIndex(skyboxIndex);
+        Triggerbot::SetEnabled(triggerEnabled);
+        Triggerbot::SetKey(triggerKey);
+        Triggerbot::SetHeadOnly(triggerHeadOnly);
+        Triggerbot::SetDelayMs(triggerDelay);
         Renderer::SetMenuKey(menuKey);
         Style::SetAccent(accent[0], accent[1], accent[2]);
         Style::Apply();

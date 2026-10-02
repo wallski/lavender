@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Skybox.h"
 #include "../chams/Materials.h"
+#include "../../combat/legit/triggerbot/Triggerbot.h"
 #include "../../../../config/OffsetConfig.h"
 #include "../../../../core/memory/PatternScan.h"
 #include "../../../../core/interfaces/InterfaceManager.h"
@@ -38,15 +39,12 @@ namespace Skybox {
 
     static uintptr_t g_draw_hook_fn = 0;
     static uint8_t* g_draw_stub = nullptr;
-    static uint8_t g_draw_original_prologue[5] = { 0 };
-    static int32_t g_draw_original_jle_rel = 0;
+    static uint8_t g_draw_original[5] = { 0 };
+    static int32_t g_draw_jle_rel = 0;
 
     static uintptr_t g_fsn_hook_fn = 0;
     static uint8_t* g_fsn_stub = nullptr;
-    static uint8_t g_fsn_original_prologue[5] = { 0 };
-
-    static uintptr_t g_last_written = 0;
-    static uintptr_t g_original_material = 0;
+    static uint8_t g_fsn_original[5] = { 0 };
 
     static uint32_t HashPath(const char* s) {
         uint32_t h = 2166136261u;
@@ -83,6 +81,7 @@ namespace Skybox {
 
     extern "C" void SkyboxFSNHandler() {
         TryPrecache();
+        Triggerbot::OnGameThreadWrite();
     }
 
     static uint8_t* WriteSkyboxStub(uintptr_t fn) {
@@ -114,7 +113,7 @@ namespace Skybox {
         *p++ = 0x45; *p++ = 0x85; *p++ = 0xC9;
 
         *p++ = 0x0F; *p++ = 0x8E;
-        int32_t jle_rel = (int32_t)((fn + 9 + g_draw_original_jle_rel) - ((uintptr_t)p + 4));
+        int32_t jle_rel = (int32_t)((fn + 9 + g_draw_jle_rel) - ((uintptr_t)p + 4));
         *(int32_t*)p = jle_rel; p += 4;
 
         *p++ = 0x48; *p++ = 0xB8;
@@ -125,12 +124,12 @@ namespace Skybox {
     }
 
     static bool InstallSkyboxDrawHook(uintptr_t fn) {
-        memcpy(g_draw_original_prologue, (void*)fn, 5);
-        if (g_draw_original_prologue[0] != 0x45 || g_draw_original_prologue[1] != 0x85) return false;
-        if (g_draw_original_prologue[2] != 0xC9 || g_draw_original_prologue[3] != 0x0F) return false;
-        if (g_draw_original_prologue[4] != 0x8E) return false;
+        memcpy(g_draw_original, (void*)fn, 5);
+        if (g_draw_original[0] != 0x45 || g_draw_original[1] != 0x85) return false;
+        if (g_draw_original[2] != 0xC9 || g_draw_original[3] != 0x0F) return false;
+        if (g_draw_original[4] != 0x8E) return false;
 
-        g_draw_original_jle_rel = *(int32_t*)(fn + 5);
+        g_draw_jle_rel = *(int32_t*)(fn + 5);
 
         g_draw_stub = WriteSkyboxStub(fn);
         if (!g_draw_stub) return false;
@@ -153,31 +152,38 @@ namespace Skybox {
         if (!stub) return nullptr;
         uint8_t* p = stub;
 
+        *p++ = 0x50;
         *p++ = 0x51;
         *p++ = 0x52;
-        *p++ = 0x48; *p++ = 0x83; *p++ = 0xEC; *p++ = 0x28;
+        *p++ = 0x41; *p++ = 0x50;
+        *p++ = 0x41; *p++ = 0x51;
+        *p++ = 0x41; *p++ = 0x52;
+        *p++ = 0x41; *p++ = 0x53;
 
         *p++ = 0x48; *p++ = 0xB8;
         *(uint64_t*)p = (uint64_t)&SkyboxFSNHandler; p += 8;
         *p++ = 0xFF; *p++ = 0xD0;
 
-        *p++ = 0x48; *p++ = 0x83; *p++ = 0xC4; *p++ = 0x28;
+        *p++ = 0x41; *p++ = 0x5B;
+        *p++ = 0x41; *p++ = 0x5A;
+        *p++ = 0x41; *p++ = 0x59;
+        *p++ = 0x41; *p++ = 0x58;
         *p++ = 0x5A;
         *p++ = 0x59;
+        *p++ = 0x58;
 
         *p++ = 0x48; *p++ = 0x89; *p++ = 0x5C; *p++ = 0x24; *p++ = 0x18;
 
-        *p++ = 0x48; *p++ = 0xB8;
+        *p++ = 0xFF; *p++ = 0x25; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00;
         *(uint64_t*)p = fn + 5; p += 8;
-        *p++ = 0xFF; *p++ = 0xE0;
 
         return stub;
     }
 
     static bool InstallFSNHook(uintptr_t fn) {
-        memcpy(g_fsn_original_prologue, (void*)fn, 5);
-        if (g_fsn_original_prologue[0] != 0x48 || g_fsn_original_prologue[1] != 0x89) return false;
-        if (g_fsn_original_prologue[2] != 0x5C || g_fsn_original_prologue[3] != 0x24) return false;
+        memcpy(g_fsn_original, (void*)fn, 5);
+        if (g_fsn_original[0] != 0x48 || g_fsn_original[1] != 0x89) return false;
+        if (g_fsn_original[2] != 0x5C || g_fsn_original[3] != 0x24) return false;
 
         g_fsn_stub = WriteFSNStub(fn);
         if (!g_fsn_stub) return false;
@@ -199,7 +205,7 @@ namespace Skybox {
         if (g_draw_hook_fn) {
             DWORD old = 0;
             if (VirtualProtect((void*)g_draw_hook_fn, 5, PAGE_EXECUTE_READWRITE, &old)) {
-                memcpy((void*)g_draw_hook_fn, g_draw_original_prologue, 5);
+                memcpy((void*)g_draw_hook_fn, g_draw_original, 5);
                 VirtualProtect((void*)g_draw_hook_fn, 5, old, &old);
                 FlushInstructionCache(GetCurrentProcess(), (void*)g_draw_hook_fn, 5);
             }
@@ -209,7 +215,7 @@ namespace Skybox {
         if (g_fsn_hook_fn) {
             DWORD old = 0;
             if (VirtualProtect((void*)g_fsn_hook_fn, 5, PAGE_EXECUTE_READWRITE, &old)) {
-                memcpy((void*)g_fsn_hook_fn, g_fsn_original_prologue, 5);
+                memcpy((void*)g_fsn_hook_fn, g_fsn_original, 5);
                 VirtualProtect((void*)g_fsn_hook_fn, 5, old, &old);
                 FlushInstructionCache(GetCurrentProcess(), (void*)g_fsn_hook_fn, 5);
             }
@@ -328,7 +334,7 @@ namespace Skybox {
             return false;
         }
 
-        printf("[Skybox] Ready.\n");
+        printf("[Skybox] Ready (precache enabled).\n");
         return true;
     }
 
@@ -410,32 +416,14 @@ namespace Skybox {
         __except (EXCEPTION_EXECUTE_HANDLER) { return; }
         if (!binding) return;
 
-        uintptr_t current = 0;
-        __try { current = *(uintptr_t*)binding; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return; }
-
-        if (current != g_last_written) {
-            g_original_material = current;
-        }
-
         const int sel = g_selected;
         const bool enabled = (g_enabled != 0);
         const uintptr_t custom = (sel > 0 && sel < (int)g_entries.size())
             ? g_materials[sel] : 0;
 
         if (enabled && custom != 0) {
-            if (current != custom) {
-                __try { *(uintptr_t*)binding = custom; }
-                __except (EXCEPTION_EXECUTE_HANDLER) {}
-                g_last_written = custom;
-            }
-        }
-        else {
-            if (g_last_written != 0 && g_original_material != 0 && current == g_last_written) {
-                __try { *(uintptr_t*)binding = g_original_material; }
-                __except (EXCEPTION_EXECUTE_HANDLER) {}
-                g_last_written = 0;
-            }
+            __try { *(uintptr_t*)binding = custom; }
+            __except (EXCEPTION_EXECUTE_HANDLER) {}
         }
     }
 }

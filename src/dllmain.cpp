@@ -8,6 +8,7 @@
 #include "core/features/visuals/chams/Materials.h"
 #include "core/features/visuals/skybox/Skybox.h"
 #include "core/features/combat/CombatShared.h"
+#include "core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "render/Renderer.h"
 #include <thread>
 #include <cstdarg>
@@ -180,6 +181,7 @@ void MainThread(HMODULE hModule) {
     }
 
     CombatShared::Initialize();
+    Triggerbot::Initialize();
 
     PresentHook::Initialize();
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
@@ -203,6 +205,7 @@ void MainThread(HMODULE hModule) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 
+    Triggerbot::Shutdown();
     RestoreSortHook();
     CombatShared::Shutdown();
     Skybox::Shutdown();

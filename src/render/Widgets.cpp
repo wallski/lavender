@@ -136,6 +136,8 @@ namespace Widgets {
             case VK_MENU:    strcpy_s(keyName, "Alt");     break;
             case VK_CONTROL: strcpy_s(keyName, "Ctrl");    break;
             case VK_SPACE:   strcpy_s(keyName, "Space");   break;
+            case VK_XBUTTON1: strcpy_s(keyName, "Mouse4"); break;
+            case VK_XBUTTON2: strcpy_s(keyName, "Mouse5"); break;
             default: {
                 UINT sc = MapVirtualKeyA(*key, MAPVK_VK_TO_VSC);
                 if (!GetKeyNameTextA(sc << 16, keyName, sizeof(keyName)))
@@ -202,6 +204,69 @@ namespace Widgets {
         }
 
         ImGui::PopID();
+        return changed;
+    }
+
+    bool SliderFloat(const char* label, float* v, float min, float max, const char* fmt) {
+        ImGui::PushID(label);
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        float avail = ImGui::GetContentRegionAvail().x;
+        float rowH = Style::RowHeight;
+
+        ImGui::InvisibleButton("##row", ImVec2(avail, rowH));
+        bool hovered = ImGui::IsItemHovered();
+        bool active = ImGui::IsItemActive();
+
+        ImGuiID hid = ImGui::GetID("##h");
+        TickHover(hid, hovered);
+        DrawRowHover(pos, avail, rowH, g_hoverAnim[hid]);
+        DrawRowLabel(pos, rowH, label);
+
+        const float trackW = 130.0f;
+        const float trackH = 4.0f;
+        ImVec2 trackPos(pos.x + avail - trackW - Style::RowInnerPad,
+            pos.y + rowH * 0.5f - trackH * 0.5f);
+
+        float t = (*v - min) / (max - min);
+        if (t < 0.0f) t = 0.0f;
+        if (t > 1.0f) t = 1.0f;
+        float fillW = trackW * t;
+
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        d->AddRectFilled(trackPos, ImVec2(trackPos.x + trackW, trackPos.y + trackH),
+            ImGui::GetColorU32(ImVec4(0.18f, 0.18f, 0.21f, 1.0f)), trackH * 0.5f);
+        d->AddRectFilled(trackPos, ImVec2(trackPos.x + fillW, trackPos.y + trackH),
+            ImGui::GetColorU32(Style::Accent), trackH * 0.5f);
+
+        float knobR = 6.0f;
+        d->AddCircleFilled(ImVec2(trackPos.x + fillW, trackPos.y + trackH * 0.5f),
+            knobR, IM_COL32(255, 255, 255, 255));
+
+        char valueText[32];
+        snprintf(valueText, sizeof(valueText), fmt, *v);
+        ImVec2 textSize = ImGui::CalcTextSize(valueText);
+        d->AddText(ImVec2(trackPos.x - textSize.x - 12.0f,
+            pos.y + rowH * 0.5f - textSize.y * 0.5f),
+            ImGui::GetColorU32(Style::TextMuted), valueText);
+
+        bool changed = false;
+        if (active && ImGui::GetIO().MouseDown[0]) {
+            float mx = ImGui::GetIO().MousePos.x;
+            float newT = (mx - trackPos.x) / trackW;
+            if (newT < 0.0f) newT = 0.0f;
+            if (newT > 1.0f) newT = 1.0f;
+            float newV = min + (max - min) * newT;
+            if (newV != *v) { *v = newV; changed = true; }
+        }
+
+        ImGui::PopID();
+        return changed;
+    }
+
+    bool SliderInt(const char* label, int* v, int min, int max) {
+        float fv = (float)*v;
+        bool changed = SliderFloat(label, &fv, (float)min, (float)max, "%.0f");
+        if (changed) *v = (int)(fv + 0.5f);
         return changed;
     }
 

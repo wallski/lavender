@@ -11,6 +11,7 @@
 #include "../core/features/visuals/removals/Removals.h"
 #include "../core/features/visuals/skybox/Skybox.h"
 #include "../core/features/combat/CombatShared.h"
+#include "../core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "../core/config/ConfigManager.h"
 #include "../core/hooks/InlineHook.h"
 #include "../config/OffsetConfig.h"
@@ -215,25 +216,27 @@ namespace Renderer {
         "None", "Matte", "Flat", "Glow", "Outlines", "Bloom"
     };
 
-    static void DrawCombatDebug() {
-        if (!CombatShared::GetLocalPawn()) return;
-
-        auto enemies = CombatShared::GetEnemies();
-        ImDrawList* d = ImGui::GetBackgroundDrawList();
-
-        for (const auto& e : enemies) {
-            Vec3 screen;
-            if (!CombatShared::WorldToScreen(e.headPos, screen)) continue;
-
-            ImU32 col = e.visible ? IM_COL32(0, 255, 0, 255) : IM_COL32(255, 60, 60, 255);
-            d->AddCircleFilled(ImVec2(screen.x, screen.y), 5.0f, col);
-            d->AddCircle(ImVec2(screen.x, screen.y), 7.0f, IM_COL32(0, 0, 0, 200), 0, 1.5f);
-        }
-    }
-
     static void DrawLegitTab() {
-        Widgets::BeginCard("AIM", 1);
-        Widgets::TextMuted("Coming in a later iteration.");
+        bool enabled = Triggerbot::IsEnabled();
+        int key = Triggerbot::GetKey();
+        bool headOnly = Triggerbot::GetHeadOnly();
+        int delay = Triggerbot::GetDelayMs();
+
+        Widgets::BeginCard("TRIGGERBOT", 4);
+
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            Triggerbot::SetEnabled(enabled);
+        }
+        if (Widgets::Keybind("Trigger key", &key)) {
+            Triggerbot::SetKey(key);
+        }
+        if (Widgets::Toggle("Head only", &headOnly)) {
+            Triggerbot::SetHeadOnly(headOnly);
+        }
+        if (Widgets::SliderInt("Delay", &delay, 0, 250)) {
+            Triggerbot::SetDelayMs(delay);
+        }
+
         Widgets::EndCard();
     }
 
@@ -555,12 +558,12 @@ namespace Renderer {
 
         UpdateMouseState();
         Removals::Update();
+        Triggerbot::Tick();
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-        DrawCombatDebug();
         DrawMenu();
 
         ImGui::Render();

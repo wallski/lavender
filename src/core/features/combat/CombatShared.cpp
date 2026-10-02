@@ -8,6 +8,9 @@ namespace CombatShared {
 
     static uintptr_t g_traceRayFn = 0;
     static uintptr_t g_traceFilterInitFn = 0;
+    static uintptr_t g_usercmdBaseFn = 0;
+    static uintptr_t g_usercmdGetFn = 0;
+    static uintptr_t g_processInputEventFn = 0;
     static volatile LONG64 g_frame_counter = 0;
 
     static uintptr_t ReadPtr(uintptr_t addr) {
@@ -42,12 +45,22 @@ namespace CombatShared {
 
     void Initialize() {
         g_traceRayFn = Memory::FindPattern("client.dll",
-            "48 89 54 24 ?? 48 89 4C 24 ?? 55 53 56 57 41 56 41 57 48 8D AC 24 ?? ?? ?? ?? B8 E8 24 00 00");
+            "48 89 54 24 ?? 48 89 4C 24 ?? 55 53 56 57 41 56 41 57 48 8D AC 24 ?? ?? ?? ?? B8 ?? ?? ?? ??");
         g_traceFilterInitFn = Memory::FindPattern("client.dll",
             "48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 0F B6 41 ?? 33 FF 24");
 
+        g_usercmdBaseFn = Memory::FindPattern("client.dll",
+            "48 83 EC 28 E8 ? ? ? ? 8B 80 10 59 00 00");
+        g_usercmdGetFn = Memory::FindPattern("client.dll",
+            "40 53 48 83 EC 20 8B DA E8 ? ? ? ? 4C 8B C0");
+        g_processInputEventFn = Memory::FindPattern("client.dll",
+            "48 89 5C 24 08 57 48 83 EC 20 C6 41 08 00 48 8D 05 ? ? ? ? 48 89 01 48 8B D9");
+
         printf("[CombatShared] trace_ray=0x%llX filter_init=0x%llX\n",
             (unsigned long long)g_traceRayFn, (unsigned long long)g_traceFilterInitFn);
+        printf("[CombatShared] usercmd_base=0x%llX usercmd_get=0x%llX process_input=0x%llX\n",
+            (unsigned long long)g_usercmdBaseFn, (unsigned long long)g_usercmdGetFn,
+            (unsigned long long)g_processInputEventFn);
         fflush(stdout);
     }
 
