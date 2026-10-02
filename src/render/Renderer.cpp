@@ -1,11 +1,14 @@
 #include "pch.h"
 #include "Renderer.h"
 #include "Style.h"
+
 #include "Widgets.h"
 #include "imgui.h"
 #include "imgui_internal.h"
 #include "imgui_impl_dx11.h"
 #include "imgui_impl_win32.h"
+#include "../core/features/visuals/chams/Chams.h"
+
 
 LRESULT WINAPI ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -22,7 +25,7 @@ namespace Renderer {
     static bool                    g_mouseReleased = false;
     static float                   g_alpha = 0.0f;
     static int                     g_activeTab = 0;
-    static int                     g_menuKey = VK_INSERT;
+    static int                     g_menuKey = VK_DELETE;
     static bool                    g_unloadRequested = false;
     static bool                    g_readyToUnload = false;
 
@@ -82,7 +85,21 @@ namespace Renderer {
 
     static void DrawPlayersTab() {
         Widgets::SectionHeader("Chams");
-        Widgets::TextMuted("Coming in a later iteration.");
+
+        bool enabled = Chams::IsEnabled();
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            Chams::SetEnabled(enabled);
+        }
+
+        float color[4];
+        float* cur = Chams::GetColor();
+        color[0] = cur[0];
+        color[1] = cur[1];
+        color[2] = cur[2];
+        color[3] = cur[3];
+        if (Widgets::ColorPicker("Color", color)) {
+            Chams::SetColor(color);
+        }
     }
 
     static void DrawWorldTab() {

@@ -130,4 +130,33 @@ namespace OffsetConfig {
         loaded = true;
         return true;
     }
+
+    static uintptr_t GetModuleBase(const char* name) {
+        HMODULE h = GetModuleHandleA(name);
+        return h ? reinterpret_cast<uintptr_t>(h) : 0;
+    }
+
+    void Resolve() {
+        uintptr_t clientBase = GetModuleBase("client.dll");
+        uintptr_t engineBase = GetModuleBase("engine2.dll");
+
+        printf("[OffsetConfig] Resolving RVAs (client=0x%llX engine=0x%llX)\n",
+            (unsigned long long)clientBase, (unsigned long long)engineBase); fflush(stdout);
+
+        globals.dwEntityList += clientBase;
+        globals.dwLocalPlayerController += clientBase;
+        globals.dwLocalPlayerPawn += clientBase;
+        globals.dwViewMatrix += clientBase;
+        globals.dwGameRules += clientBase;
+        globals.dwGlobalVars += engineBase;
+
+        printf("[OffsetConfig] Resolved absolute addresses:\n");
+        printf("  dwEntityList            = 0x%llX\n", (unsigned long long)globals.dwEntityList);
+        printf("  dwLocalPlayerController = 0x%llX\n", (unsigned long long)globals.dwLocalPlayerController);
+        printf("  dwLocalPlayerPawn       = 0x%llX\n", (unsigned long long)globals.dwLocalPlayerPawn);
+        printf("  dwViewMatrix            = 0x%llX\n", (unsigned long long)globals.dwViewMatrix);
+        printf("  dwGameRules             = 0x%llX\n", (unsigned long long)globals.dwGameRules);
+        printf("  dwGlobalVars            = 0x%llX\n", (unsigned long long)globals.dwGlobalVars);
+        fflush(stdout);
+    }
 }

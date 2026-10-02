@@ -2,226 +2,202 @@
 #include "config/OffsetConfig.h"
 #include "core/hooks/PresentHook.h"
 #include "core/interfaces/InterfaceManager.h"
+#include "core/memory/PatternScan.h"
+#include "core/features/visuals/chams/Chams.h"
 #include "render/Renderer.h"
 #include <thread>
+#include <cstdarg>
 
-static const int TARGET_SLOTS[] = { 20, 21, 24, 25, 26, 28, 29, 30, 31, 34, 46, 47, 48, 51, 52, 54, 55, 56, 57, 85 };
-static const int NUM_TARGETS = 20;
+static HANDLE g_logHandle = INVALID_HANDLE_VALUE;
 
-static volatile LONG64 g_totalCalls[NUM_TARGETS] = { 0 };
-static volatile LONG64 g_pawnVtableMatches[NUM_TARGETS] = { 0 };
-static volatile LONG64 g_localPawnHealthHits[NUM_TARGETS] = { 0 };
-
-static void* g_originalFns[NUM_TARGETS] = { 0 };
-static void** g_patchedVtable = nullptr;
-static uint8_t* g_stubBuffer = nullptr;
-
-static uintptr_t g_localPawnVtable = 0;
-static uintptr_t g_localPawnAddr = 0;
-static int       g_localPawnHealth = 0;
-
-static bool __TryReadVtable(void* obj, void*** outVtable) {
-    __try { *outVtable = *reinterpret_cast<void***>(obj); return true; }
-    __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
-}
-
-static void SnapshotLocalPawn() {
-    uintptr_t dwLocalPlayerPawn = OffsetConfig::globals.dwLocalPlayerPawn;
-    if (!dwLocalPlayerPawn) {
-        printf("[Probe] dwLocalPlayerPawn is 0\n"); fflush(stdout);
-        return;
-    }
-
-    HANDLE hSelf = GetCurrentProcess();
-    SIZE_T br = 0;
-    uintptr_t pawn = 0;
-    if (!ReadProcessMemory(hSelf, (LPCVOID)dwLocalPlayerPawn, &pawn, sizeof(pawn), &br) || !pawn) {
-        printf("[Probe] could not read local pawn pointer\n"); fflush(stdout);
-        return;
-    }
-    g_localPawnAddr = pawn;
-
-    uintptr_t vtable = 0;
-    if (ReadProcessMemory(hSelf, (LPCVOID)pawn, &vtable, sizeof(vtable), &br)) {
-        g_localPawnVtable = vtable;
-    }
-
-    int health = 0;
-    if (ReadProcessMemory(hSelf, (LPCVOID)(pawn + OffsetConfig::fields.m_iHealth), &health, 4, &br)) {
-        g_localPawnHealth = health;
-    }
-
-    int team = 0;
-    ReadProcessMemory(hSelf, (LPCVOID)(pawn + OffsetConfig::fields.m_iTeamNum), &team, 4, &br);
-
-    printf("[Probe] === Local pawn snapshot ===\n"); fflush(stdout);
-    printf("[Probe] dwLocalPlayerPawn global = 0x%llX\n", (unsigned long long)dwLocalPlayerPawn); fflush(stdout);
-    printf("[Probe] pawn pointer             = 0x%llX\n", (unsigned long long)pawn); fflush(stdout);
-    printf("[Probe] pawn vtable              = 0x%llX\n", (unsigned long long)vtable); fflush(stdout);
-    printf("[Probe] pawn health              = %d\n", health); fflush(stdout);
-    printf("[Probe] pawn team                = %d\n", team); fflush(stdout);
-    printf("[Probe] ============================\n\n"); fflush(stdout);
-}
-
-static void CommonHandler(int slotIdx, void* arg1) {
-    InterlockedIncrement64(&g_totalCalls[slotIdx]);
-
-    if (!arg1) return;
-    uintptr_t p = (uintptr_t)arg1;
-    if (p < 0x10000 || p > 0x7FFFFFFFFFFF) return;
-
-    HANDLE hSelf = GetCurrentProcess();
-    uintptr_t vt = 0;
-    SIZE_T br = 0;
-    if (!ReadProcessMemory(hSelf, (LPCVOID)p, &vt, sizeof(vt), &br)) return;
-
-    if (vt == g_localPawnVtable) {
-        InterlockedIncrement64(&g_pawnVtableMatches[slotIdx]);
-
-        int h = 0;
-        if (ReadProcessMemory(hSelf, (LPCVOID)(p + OffsetConfig::fields.m_iHealth), &h, 4, &br)) {
-            if (h > 0 && h <= 200) {
-                InterlockedIncrement64(&g_localPawnHealthHits[slotIdx]);
-            }
+static void LogInit(const char* anchor) {
+    char path[MAX_PATH] = { 0 };
+    HMODULE hm = NULL;
+    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+        anchor, &hm);
+    GetModuleFileNameA(hm, path, MAX_PATH);
+    char* lastSlash = strrchr(path, '\\');
+    if (lastSlash) *(lastSlash + 1) = 0;
+    strcat_s(path, "lavender_log.txt");
+    g_logHandle = CreateFileA(path, GENERIC_WRITE,
+        FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+        CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (g_logHandle == INVALID_HANDLE_VALUE) {
+        char tempPath[MAX_PATH] = { 0 };
+        DWORD n = GetTempPathA(MAX_PATH, tempPath);
+        if (n > 0 && n < MAX_PATH) {
+            strcat_s(tempPath, "lavender_log.txt");
+            g_logHandle = CreateFileA(tempPath, GENERIC_WRITE,
+                FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
+                CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
         }
     }
 }
 
-extern "C" void H00(void* a1) { CommonHandler(0, a1); }
-extern "C" void H01(void* a1) { CommonHandler(1, a1); }
-extern "C" void H02(void* a1) { CommonHandler(2, a1); }
-extern "C" void H03(void* a1) { CommonHandler(3, a1); }
-extern "C" void H04(void* a1) { CommonHandler(4, a1); }
-extern "C" void H05(void* a1) { CommonHandler(5, a1); }
-extern "C" void H06(void* a1) { CommonHandler(6, a1); }
-extern "C" void H07(void* a1) { CommonHandler(7, a1); }
-extern "C" void H08(void* a1) { CommonHandler(8, a1); }
-extern "C" void H09(void* a1) { CommonHandler(9, a1); }
-extern "C" void H10(void* a1) { CommonHandler(10, a1); }
-extern "C" void H11(void* a1) { CommonHandler(11, a1); }
-extern "C" void H12(void* a1) { CommonHandler(12, a1); }
-extern "C" void H13(void* a1) { CommonHandler(13, a1); }
-extern "C" void H14(void* a1) { CommonHandler(14, a1); }
-extern "C" void H15(void* a1) { CommonHandler(15, a1); }
-extern "C" void H16(void* a1) { CommonHandler(16, a1); }
-extern "C" void H17(void* a1) { CommonHandler(17, a1); }
-extern "C" void H18(void* a1) { CommonHandler(18, a1); }
-extern "C" void H19(void* a1) { CommonHandler(19, a1); }
-
-static void(*g_handlers[NUM_TARGETS])(void*) = {
-    H00,H01,H02,H03,H04,H05,H06,H07,H08,H09,
-    H10,H11,H12,H13,H14,H15,H16,H17,H18,H19
-};
-
-static void WriteStub(uint8_t* buf, int slotIdx) {
-    uint8_t* p = buf;
-    *p++ = 0x48; *p++ = 0x83; *p++ = 0xEC; *p++ = 0x48;
-    *p++ = 0x48; *p++ = 0x89; *p++ = 0x4C; *p++ = 0x24; *p++ = 0x20;
-    *p++ = 0x48; *p++ = 0x89; *p++ = 0x54; *p++ = 0x24; *p++ = 0x28;
-    *p++ = 0x4C; *p++ = 0x89; *p++ = 0x44; *p++ = 0x24; *p++ = 0x30;
-    *p++ = 0x4C; *p++ = 0x89; *p++ = 0x4C; *p++ = 0x24; *p++ = 0x38;
-    *p++ = 0x48; *p++ = 0x8B; *p++ = 0x4C; *p++ = 0x24; *p++ = 0x28;
-    *p++ = 0x48; *p++ = 0xB8;
-    *(uint64_t*)p = (uint64_t)g_handlers[slotIdx]; p += 8;
-    *p++ = 0xFF; *p++ = 0xD0;
-    *p++ = 0x48; *p++ = 0x8B; *p++ = 0x4C; *p++ = 0x24; *p++ = 0x20;
-    *p++ = 0x48; *p++ = 0x8B; *p++ = 0x54; *p++ = 0x24; *p++ = 0x28;
-    *p++ = 0x4C; *p++ = 0x8B; *p++ = 0x44; *p++ = 0x24; *p++ = 0x30;
-    *p++ = 0x4C; *p++ = 0x8B; *p++ = 0x4C; *p++ = 0x24; *p++ = 0x38;
-    *p++ = 0x48; *p++ = 0x83; *p++ = 0xC4; *p++ = 0x48;
-    *p++ = 0x48; *p++ = 0xB8;
-    *(uint64_t*)p = (uint64_t)&g_originalFns[slotIdx]; p += 8;
-    *p++ = 0x48; *p++ = 0x8B; *p++ = 0x00;
-    *p++ = 0xFF; *p++ = 0xE0;
+static void Log(const char* fmt, ...) {
+    char buf[4096];
+    va_list args;
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+    printf("%s", buf);
+    fflush(stdout);
+    if (g_logHandle != INVALID_HANDLE_VALUE) {
+        DWORD written = 0;
+        WriteFile(g_logHandle, buf, (DWORD)strlen(buf), &written, NULL);
+    }
 }
 
-static bool InstallProbe(void* instance) {
-    void** vtable = nullptr;
-    if (!__TryReadVtable(instance, &vtable) || !vtable) return false;
+static void LogClose() {
+    if (g_logHandle != INVALID_HANDLE_VALUE) {
+        CloseHandle(g_logHandle);
+        g_logHandle = INVALID_HANDLE_VALUE;
+    }
+}
 
-    const size_t STUB_SIZE = 128;
-    g_stubBuffer = (uint8_t*)VirtualAlloc(nullptr, STUB_SIZE * NUM_TARGETS,
-        MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-    if (!g_stubBuffer) return false;
+static volatile LONG64 g_sortCallCount = 0;
+static uintptr_t g_sortFn = 0;
+static uint8_t* g_stub = nullptr;
+static uint8_t g_originalBytes[16] = { 0 };
+
+extern "C" void CaptureSortCall(void* array, uint32_t count) {
+    InterlockedIncrement64(&g_sortCallCount);
+    Chams::OnSortCall(array, count);
+}
+
+static void* AllocNear(void* hint, size_t size) {
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    uintptr_t gran = si.dwAllocationGranularity;
+    uintptr_t base = (uintptr_t)hint & ~(gran - 1);
+    for (int i = 1; i < 0x1000; i++) {
+        uintptr_t addr = base - (uintptr_t)i * gran;
+        void* mem = VirtualAlloc((void*)addr, size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        if (mem) return mem;
+    }
+    for (int i = 1; i < 0x1000; i++) {
+        uintptr_t addr = base + (uintptr_t)i * gran;
+        void* mem = VirtualAlloc((void*)addr, size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+        if (mem) return mem;
+    }
+    return VirtualAlloc(nullptr, size, MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+}
+
+static uint8_t* WriteSortStub(uintptr_t fn) {
+    uint8_t* stub = (uint8_t*)AllocNear((void*)fn, 128);
+    if (!stub) return nullptr;
+    uint8_t* p = stub;
+
+    *p++ = 0x51;
+    *p++ = 0x52;
+    *p++ = 0x41; *p++ = 0x50;
+    *p++ = 0x41; *p++ = 0x51;
+    *p++ = 0x48; *p++ = 0x83; *p++ = 0xEC; *p++ = 0x28;
+    *p++ = 0x4C; *p++ = 0x89; *p++ = 0xC1;
+    *p++ = 0x44; *p++ = 0x89; *p++ = 0xCA;
+    *p++ = 0x48; *p++ = 0xB8;
+    *(uint64_t*)p = (uint64_t)&CaptureSortCall; p += 8;
+    *p++ = 0xFF; *p++ = 0xD0;
+    *p++ = 0x48; *p++ = 0x83; *p++ = 0xC4; *p++ = 0x28;
+    *p++ = 0x41; *p++ = 0x59;
+    *p++ = 0x41; *p++ = 0x58;
+    *p++ = 0x5A;
+    *p++ = 0x59;
+    *p++ = 0x55;
+    *p++ = 0x56;
+    *p++ = 0x57;
+    *p++ = 0x48; *p++ = 0x83; *p++ = 0xEC; *p++ = 0x30;
+    *p++ = 0xFF; *p++ = 0x25; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00;
+    *(uint64_t*)p = fn + 16; p += 8;
+    return stub;
+}
+
+static bool InstallSortHook(uintptr_t fn) {
+    memcpy(g_originalBytes, (void*)fn, 16);
+    if (g_originalBytes[0] != 0x45 || g_originalBytes[1] != 0x85 || g_originalBytes[2] != 0xC9) return false;
+    if (g_originalBytes[3] != 0x0F || g_originalBytes[4] != 0x84) return false;
+    if (g_originalBytes[9] != 0x55 || g_originalBytes[10] != 0x56 || g_originalBytes[11] != 0x57) return false;
+
+    g_stub = WriteSortStub(fn);
+    if (!g_stub) return false;
+
+    intptr_t rel = (intptr_t)g_stub - (intptr_t)(fn + 9) - 5;
+    if (rel < INT32_MIN || rel > INT32_MAX) return false;
 
     DWORD oldProtect = 0;
-    if (!VirtualProtect(vtable, 128 * 8, PAGE_EXECUTE_READWRITE, &oldProtect)) return false;
-
-    for (int i = 0; i < NUM_TARGETS; i++) {
-        int slot = TARGET_SLOTS[i];
-        void* originalFn = nullptr;
-        __try { originalFn = vtable[slot]; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { continue; }
-        if (!originalFn) continue;
-
-        g_originalFns[i] = originalFn;
-        uint8_t* stubAddr = g_stubBuffer + (i * STUB_SIZE);
-        WriteStub(stubAddr, i);
-        vtable[slot] = (void*)stubAddr;
-    }
-
-    VirtualProtect(vtable, 128 * 8, oldProtect, &oldProtect);
-    g_patchedVtable = vtable;
+    if (!VirtualProtect((void*)(fn + 9), 5, PAGE_EXECUTE_READWRITE, &oldProtect)) return false;
+    uint8_t* patch = (uint8_t*)(fn + 9);
+    patch[0] = 0xE9;
+    *(int32_t*)(patch + 1) = (int32_t)rel;
+    VirtualProtect((void*)(fn + 9), 5, oldProtect, &oldProtect);
+    FlushInstructionCache(GetCurrentProcess(), (void*)(fn + 9), 5);
     return true;
 }
 
-static void RestoreProbe() {
-    if (!g_patchedVtable) return;
+static void RestoreSortHook() {
+    if (!g_sortFn) return;
     DWORD oldProtect = 0;
-    if (!VirtualProtect(g_patchedVtable, 128 * 8, PAGE_EXECUTE_READWRITE, &oldProtect)) return;
-    for (int i = 0; i < NUM_TARGETS; i++) {
-        if (g_originalFns[i]) g_patchedVtable[TARGET_SLOTS[i]] = g_originalFns[i];
+    if (VirtualProtect((void*)(g_sortFn + 9), 5, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+        memcpy((void*)(g_sortFn + 9), g_originalBytes + 9, 5);
+        VirtualProtect((void*)(g_sortFn + 9), 5, oldProtect, &oldProtect);
+        FlushInstructionCache(GetCurrentProcess(), (void*)(g_sortFn + 9), 5);
     }
-    VirtualProtect(g_patchedVtable, 128 * 8, oldProtect, &oldProtect);
-    g_patchedVtable = nullptr;
-    printf("[Probe] Vtable restored.\n"); fflush(stdout);
+    if (g_stub) { VirtualFree(g_stub, 0, MEM_RELEASE); g_stub = nullptr; }
 }
 
 void MainThread(HMODULE hModule) {
-    if (!AllocConsole()) return;
+    LogInit((const char*)&MainThread);
+    if (!AllocConsole()) { LogClose(); return; }
     FILE* f;
     freopen_s(&f, "CONOUT$", "w", stdout);
     SetForegroundWindow(GetConsoleWindow());
 
-    printf("[Lavender] Initializing...\n"); fflush(stdout);
-    if (!OffsetConfig::Load()) return;
-    printf("[Lavender] Offsets loaded.\n"); fflush(stdout);
+    Log("[Lavender] Initializing...\n");
+    if (!OffsetConfig::Load()) { LogClose(); return; }
+    OffsetConfig::Resolve();
+    Log("[Lavender] Offsets loaded.\n");
+
+    Chams::SetEntityListGlobal(OffsetConfig::globals.dwEntityList);
+    Chams::SetLocalPawnGlobal(OffsetConfig::globals.dwLocalPlayerPawn);
 
     PresentHook::Initialize();
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
-    SnapshotLocalPawn();
-
-    void* sceneSystem = InterfaceManager::Get<void>("scenesystem.dll", "SceneSystem_002");
-    if (!sceneSystem) { printf("[Probe] no SceneSystem\n"); fflush(stdout); return; }
-    if (!InstallProbe(sceneSystem)) { printf("[Probe] install failed\n"); fflush(stdout); return; }
-
-    printf("[Probe] Facing bots for 8 seconds...\n\n"); fflush(stdout);
-    for (int s = 0; s < 8; s++) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-        printf("[Probe] t=%d\n", s + 1); fflush(stdout);
+    Log("[SortHook] Scanning for sort_primitives pattern...\n");
+    const char* pattern = "45 85 C9 0F 84 ? ? ? ? 55 56 57 48 83 EC 30";
+    uintptr_t fn = Memory::FindPattern("scenesystem.dll", pattern);
+    if (!fn) {
+        Log("[SortHook] pattern not found\n");
+    }
+    else {
+        Log("[SortHook] pattern matched at 0x%llX\n", (unsigned long long)fn);
+        g_sortFn = fn;
+        if (InstallSortHook(fn)) Log("[SortHook] hook installed\n");
+        else Log("[SortHook] hook install failed\n");
     }
 
-    printf("\n[Probe] ======= Local-pawn-vtable matches per slot =======\n"); fflush(stdout);
-    printf("[Probe] slot | total    | vtableMatch | healthValid\n"); fflush(stdout);
-    for (int i = 0; i < NUM_TARGETS; i++) {
-        printf("[Probe] %4d | %-8lld | %-11lld | %-11lld\n",
-            TARGET_SLOTS[i],
-            (long long)g_totalCalls[i],
-            (long long)g_pawnVtableMatches[i],
-            (long long)g_localPawnHealthHits[i]);
-    }
-    printf("[Probe] =================================================\n\n"); fflush(stdout);
+    Log("[Chams] Ready. Toggle in the Players tab.\n");
 
-    RestoreProbe();
-
+    ULONGLONG lastStats = GetTickCount64();
     while (!Renderer::ShouldUnload()) {
         if (GetAsyncKeyState(VK_END) & 1) Renderer::RequestUnload();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
+
+        ULONGLONG now = GetTickCount64();
+        if (now - lastStats >= 3000) {
+            Log("[Chams] sortCalls=%lld tinted=%lld scanned=%lld enabled=%d\n",
+                (long long)g_sortCallCount,
+                (long long)Chams::GetTintCount(),
+                (long long)Chams::GetScannedCount(),
+                Chams::IsEnabled() ? 1 : 0);
+            lastStats = now;
+        }
     }
 
+    RestoreSortHook();
     PresentHook::Shutdown();
     fclose(f);
+    LogClose();
     FreeConsole();
     FreeLibraryAndExitThread(hModule, 0);
 }

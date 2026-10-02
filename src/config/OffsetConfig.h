@@ -27,4 +27,5 @@ namespace OffsetConfig {
 
     bool Load();
     bool Load(const std::string& a2xFolder);
+    void Resolve();
 }
