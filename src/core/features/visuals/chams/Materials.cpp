@@ -14,8 +14,6 @@ namespace Materials {
         uint64_t version_hi;
     };
 
-    // CS2 CStrongHandle<T> is a single pointer to internal bind struct.
-    // The material pointer itself lives at *handle.binding.
     struct StrongHandle {
         uintptr_t binding;
     };
@@ -25,12 +23,6 @@ namespace Materials {
     static uintptr_t g_loadKV3 = 0;
     static uintptr_t g_createMaterial = 0;
     static uintptr_t g_materials[(int)Id::Count] = {};
-
-    static const char* g_names[(int)Id::Count] = {
-        "None",
-        "Matte", "Flat", "Glow", "Outlines", "Bloom",
-        "Matte (ignorez)", "Flat (ignorez)", "Glow (ignorez)", "Outlines (ignorez)", "Bloom (ignorez)"
-    };
 
     static const char* g_paths[(int)Id::Count] = {
         "",
@@ -204,53 +196,34 @@ namespace Materials {
     }
 
     static uintptr_t LoadMaterial(const char* kv, const char* name) {
-        if (!g_setType || !g_loadKV3 || !g_destroy || !g_createMaterial) {
-            printf("[Materials]   [%s] missing fn pointers\n", name);
-            return 0;
-        }
+        if (!g_setType || !g_loadKV3 || !g_destroy || !g_createMaterial) return 0;
 
         KeyValues3 kv3{};
         auto setResult = Memory::Call<KeyValues3*>(g_setType, &kv3, 1u, 6u);
-        if (setResult != &kv3) {
-            printf("[Materials]   [%s] SetType FAILED (ret=0x%llX expected=0x%llX)\n",
-                name, (unsigned long long)setResult, (unsigned long long) & kv3);
-            return 0;
-        }
+        if (setResult != &kv3) return 0;
 
         KV3ID_t id{ "generic", 0x41B818518343427E, 0xB5F447C23C0CDF8C };
         const bool loaded = Memory::Call<bool>(g_loadKV3, &kv3, nullptr, kv, &id, nullptr, 0u);
         if (!loaded) {
-            printf("[Materials]   [%s] LoadKV3 FAILED\n", name);
             Memory::Call<void>(g_destroy, &kv3, 0u);
             return 0;
         }
 
         StrongHandle handle{};
-        auto ret = Memory::Call<uint64_t>(g_createMaterial,
+        Memory::Call<void*>(g_createMaterial,
             (void*)nullptr,
             (void*)&handle,
             (void*)name,
             (void*)&kv3,
             (uint64_t)0,
             (uint64_t)1);
-
-        printf("[Materials]   [%s] CreateMaterial ret=0x%llX handle.binding=0x%llX\n",
-            name, (unsigned long long)ret, (unsigned long long)handle.binding);
-
         Memory::Call<void>(g_destroy, &kv3, 0u);
 
-        if (!handle.binding) {
-            printf("[Materials]   [%s] CreateMaterial FAILED (null binding)\n", name);
-            return 0;
-        }
+        if (!handle.binding) return 0;
 
         auto material = *reinterpret_cast<uintptr_t*>(handle.binding);
-        if (!material) {
-            printf("[Materials]   [%s] binding ptr is non-null but *binding=0\n", name);
-            return 0;
-        }
+        if (!material) return 0;
 
-        printf("[Materials]   [%s] OK -> 0x%llX\n", name, (unsigned long long)material);
         return material;
     }
 
@@ -264,17 +237,7 @@ namespace Materials {
         g_createMaterial = Memory::FindPattern("materialsystem2.dll",
             "48 89 5C 24 ?? 48 89 6C 24 ?? 48 89 74 24 ?? 48 89 7C 24 ?? 41 56 48 81 EC ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? 48 8B F2");
 
-        HMODULE matMod = GetModuleHandleA("materialsystem2.dll");
-        printf("[Materials] materialsystem2.dll = 0x%p\n", matMod);
-        printf("[Materials] kv3_set_type    = 0x%llX\n", (unsigned long long)g_setType);
-        printf("[Materials] kv3_destroy     = 0x%llX\n", (unsigned long long)g_destroy);
-        printf("[Materials] kv3_load        = 0x%llX\n", (unsigned long long)g_loadKV3);
-        printf("[Materials] material_create = 0x%llX\n", (unsigned long long)g_createMaterial);
-
-        if (!g_setType || !g_destroy || !g_loadKV3 || !g_createMaterial) {
-            printf("[Materials] FATAL: one or more pointers null\n");
-            return false;
-        }
+        if (!g_setType || !g_destroy || !g_loadKV3 || !g_createMaterial) return false;
 
         int loaded = 0;
         for (int i = 1; i < (int)Id::Count; i++) {
@@ -284,7 +247,8 @@ namespace Materials {
             if (g_materials[i]) loaded++;
         }
 
-        printf("[Materials] %d/%d materials loaded\n", loaded, (int)Id::Count - 1);
+        if (loaded > 0) printf("[Lavender] Materials %d/%d loaded\n", loaded, (int)Id::Count - 1);
+
         return loaded > 0;
     }
 
@@ -301,7 +265,7 @@ namespace Materials {
     const char* GetName(Id id) {
         const int i = (int)id;
         if (i < 0 || i >= (int)Id::Count) return "Unknown";
-        return g_names[i];
+        return g_paths[i];
     }
 
     int GetCount() {

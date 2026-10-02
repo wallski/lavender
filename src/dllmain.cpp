@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "config/OffsetConfig.h"
+#include "core/config/ConfigManager.h"
 #include "core/hooks/PresentHook.h"
 #include "core/interfaces/InterfaceManager.h"
 #include "core/memory/PatternScan.h"
@@ -154,55 +155,55 @@ void MainThread(HMODULE hModule) {
     SetForegroundWindow(GetConsoleWindow());
 
     Log("[Lavender] Initializing...\n");
-    if (!OffsetConfig::Load()) { LogClose(); return; }
+
+    if (!OffsetConfig::Load()) {
+        Log("[Lavender] Failed to load offsets\n");
+        LogClose();
+        return;
+    }
     OffsetConfig::Resolve();
     Log("[Lavender] Offsets loaded.\n");
 
     Chams::SetEntityListGlobal(OffsetConfig::globals.dwEntityList);
     Chams::SetLocalPawnGlobal(OffsetConfig::globals.dwLocalPlayerPawn);
 
-    Log("[Materials] Initializing...\n");
+    ConfigManager::Initialize();
+
     if (!Materials::Initialize()) {
-        Log("[Materials] Init failed\n");
+        Log("[Lavender] Materials failed\n");
     }
     else {
-        Log("[Materials] Loaded successfully\n");
+        Log("[Lavender] Materials loaded.\n");
     }
 
     PresentHook::Initialize();
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
-    Log("[SortHook] Scanning...\n");
     const char* pattern = "45 85 C9 0F 84 ? ? ? ? 55 56 57 48 83 EC 30";
     uintptr_t fn = Memory::FindPattern("scenesystem.dll", pattern);
-    if (!fn) {
-        Log("[SortHook] pattern not found\n");
+    if (fn) {
+        g_sortFn = fn;
+        if (InstallSortHook(fn)) {
+            Log("[Lavender] Sort hook installed.\n");
+        }
+        else {
+            Log("[Lavender] Sort hook failed.\n");
+        }
     }
     else {
-        Log("[SortHook] matched at 0x%llX\n", (unsigned long long)fn);
-        g_sortFn = fn;
-        if (InstallSortHook(fn)) Log("[SortHook] hook installed\n");
-        else Log("[SortHook] hook install failed\n");
+        Log("[Lavender] Sort pattern not found.\n");
     }
 
-    ULONGLONG lastStats = GetTickCount64();
+    Log("[Lavender] Ready.\n");
+
     while (!Renderer::ShouldUnload()) {
         if (GetAsyncKeyState(VK_END) & 1) Renderer::RequestUnload();
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
-
-        ULONGLONG now = GetTickCount64();
-        if (now - lastStats >= 3000) {
-            Log("[Chams] sortCalls=%lld tinted=%lld scanned=%lld enabled=%d\n",
-                (long long)g_sortCallCount,
-                (long long)Chams::GetTintCount(),
-                (long long)Chams::GetScannedCount(),
-                Chams::IsEnabled() ? 1 : 0);
-            lastStats = now;
-        }
     }
 
     RestoreSortHook();
     Materials::Shutdown();
+    ConfigManager::Shutdown();
     PresentHook::Shutdown();
     fclose(f);
     LogClose();

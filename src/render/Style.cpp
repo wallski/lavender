@@ -9,8 +9,8 @@ namespace Style {
     ImVec4 Text = ImVec4(0.925f, 0.925f, 0.945f, 1.00f);
     ImVec4 TextMuted = ImVec4(0.545f, 0.545f, 0.600f, 0.95f);
     ImVec4 TextDim = ImVec4(0.380f, 0.380f, 0.430f, 0.90f);
-    ImVec4 Accent = ImVec4(0.965f, 0.360f, 0.560f, 1.00f);
-    ImVec4 AccentDim = ImVec4(0.780f, 0.280f, 0.440f, 1.00f);
+    ImVec4 Accent = ImVec4(0.659f, 0.333f, 0.969f, 1.00f);
+    ImVec4 AccentDim = ImVec4(0.514f, 0.260f, 0.756f, 1.00f);
 
     static ImFont* g_fontRegular = nullptr;
     static ImFont* g_fontMedium = nullptr;
@@ -59,11 +59,9 @@ namespace Style {
 
         if (!regularPath.empty()) {
             g_fontRegular = io.Fonts->AddFontFromFileTTF(regularPath.c_str(), 15.0f, &cfg);
-            printf("[Style] Loaded: %s\n", regularPath.c_str());
         }
         if (!mediumPath.empty()) {
             g_fontMedium = io.Fonts->AddFontFromFileTTF(mediumPath.c_str(), 15.0f, &cfg);
-            printf("[Style] Loaded: %s\n", mediumPath.c_str());
         }
 
         if (!g_fontRegular) {
@@ -71,16 +69,12 @@ namespace Style {
             std::ifstream test(segoe);
             if (test.is_open()) {
                 g_fontRegular = io.Fonts->AddFontFromFileTTF(segoe, 15.0f, &cfg);
-                printf("[Style] Fallback font: Segoe UI\n");
             }
         }
         if (!g_fontRegular) {
             g_fontRegular = io.Fonts->AddFontDefault();
-            printf("[Style] Fallback font: ImGui default\n");
         }
         if (!g_fontMedium) g_fontMedium = g_fontRegular;
-
-        fflush(stdout);
     }
 
     void Apply() {

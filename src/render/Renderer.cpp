@@ -8,6 +8,8 @@
 #include "imgui_impl_win32.h"
 #include "../core/features/visuals/chams/Chams.h"
 #include "../core/features/visuals/chams/Materials.h"
+#include "../core/features/visuals/removals/Removals.h"
+#include "../core/config/ConfigManager.h"
 #include "../core/hooks/InlineHook.h"
 #include "../config/OffsetConfig.h"
 
@@ -48,6 +50,9 @@ namespace Renderer {
     static bool g_hasSavedInputSystem = false;
     static uint8_t g_savedInputSystemRelative = 1;
 
+    static char g_configNameBuf[64] = "default";
+    static std::string g_pendingDelete;
+
     static bool IsValidPointer(uintptr_t p) {
         return p >= 0x10000 && p <= 0x00007FFFFFFFFFFF;
     }
@@ -79,10 +84,7 @@ namespace Renderer {
 
         HMODULE sdl = GetModuleHandleA("SDL3.dll");
         if (!sdl) sdl = LoadLibraryA("SDL3.dll");
-        if (!sdl) {
-            printf("[Renderer] SDL3.dll not loaded\n");
-            return;
-        }
+        if (!sdl) return;
 
         pSDL_SetWindowRelativeMouseMode = (SDL_SetWindowRelativeMouseMode_t)
             GetProcAddress(sdl, "SDL_SetWindowRelativeMouseMode");
@@ -91,24 +93,13 @@ namespace Renderer {
         pSDL_GetKeyboardFocus = (SDL_GetKeyboardFocus_t)
             GetProcAddress(sdl, "SDL_GetKeyboardFocus");
 
-        printf("[Renderer] SDL set=%p grabbed=%p focus=%p\n",
-            (void*)pSDL_SetWindowRelativeMouseMode,
-            (void*)pSDL_GetGrabbedWindow,
-            (void*)pSDL_GetKeyboardFocus);
-
         void* getRelFn = GetProcAddress(sdl, "SDL_GetRelativeMouseState");
-        printf("[Renderer] SDL_GetRelativeMouseState = %p\n", getRelFn);
-
         if (getRelFn) {
             o_SDL_GetRelativeMouseState = (SDL_GetRelativeMouseState_t)getRelFn;
             if (g_sdlGetRelHook.Install(getRelFn, (void*)hkSDL_GetRelativeMouseState)) {
                 g_sdlGetRelHookInstalled = true;
                 o_SDL_GetRelativeMouseState =
                     g_sdlGetRelHook.CallOriginal<SDL_GetRelativeMouseState_t>();
-                printf("[Renderer] SDL_GetRelativeMouseState hooked\n");
-            }
-            else {
-                printf("[Renderer] SDL_GetRelativeMouseState hook failed\n");
             }
         }
     }
@@ -155,9 +146,7 @@ namespace Renderer {
         if (sdlWindow && pSDL_SetWindowRelativeMouseMode) {
             pSDL_SetWindowRelativeMouseMode(sdlWindow, 0);
         }
-
         SetInputSystemRelative(false);
-
         ClipCursor(nullptr);
         while (ShowCursor(TRUE) < 0) {}
         SetCursor(LoadCursor(nullptr, IDC_ARROW));
@@ -168,7 +157,6 @@ namespace Renderer {
         if (sdlWindow && pSDL_SetWindowRelativeMouseMode) {
             pSDL_SetWindowRelativeMouseMode(sdlWindow, 1);
         }
-
         SetInputSystemRelative(g_hasSavedInputSystem ? (g_savedInputSystemRelative != 0) : true);
 
         if (g_window) {
@@ -222,12 +210,7 @@ namespace Renderer {
     }
 
     static const char* kMaterialNames[] = {
-        "None",
-        "Matte",
-        "Flat",
-        "Glow",
-        "Outlines",
-        "Bloom"
+        "None", "Matte", "Flat", "Glow", "Outlines", "Bloom"
     };
 
     static void DrawLegitTab() {
@@ -235,7 +218,7 @@ namespace Renderer {
         Widgets::TextMuted("Coming in a later iteration.");
     }
 
-    static void DrawPlayersTab() {
+    static void DrawVisualsTab() {
         Widgets::SectionHeader("Chams");
 
         bool enabled = Chams::IsEnabled();
@@ -243,23 +226,19 @@ namespace Renderer {
             Chams::SetEnabled(enabled);
         }
 
-        {
-            float color[4];
-            float* cur = Chams::GetColor();
-            color[0] = cur[0];
-            color[1] = cur[1];
-            color[2] = cur[2];
-            color[3] = cur[3];
-            if (Widgets::ColorPicker("Color", color)) {
-                Chams::SetColor(color);
-            }
+        float color[4];
+        float* cur = Chams::GetColor();
+        color[0] = cur[0];
+        color[1] = cur[1];
+        color[2] = cur[2];
+        color[3] = cur[3];
+        if (Widgets::ColorPicker("Color", color)) {
+            Chams::SetColor(color);
         }
 
-        {
-            int mat = (int)Chams::GetMaterial();
-            if (ImGui::Combo("Material", &mat, kMaterialNames, IM_ARRAYSIZE(kMaterialNames))) {
-                Chams::SetMaterial((Materials::Id)mat);
-            }
+        int mat = (int)Chams::GetMaterial();
+        if (ImGui::Combo("Material", &mat, kMaterialNames, IM_ARRAYSIZE(kMaterialNames))) {
+            Chams::SetMaterial((Materials::Id)mat);
         }
 
         bool occluded = Chams::IsOccluded();
@@ -282,11 +261,86 @@ namespace Renderer {
             Style::SetAccent(current[0], current[1], current[2]);
             Style::Apply();
         }
+
+        Widgets::SectionHeader("Removals");
+
+        bool flash = Removals::IsFlashEnabled();
+        if (Widgets::Toggle("Remove flash", &flash)) {
+            Removals::SetFlashEnabled(flash);
+        }
     }
 
     static void DrawConfigTab() {
-        Widgets::SectionHeader("Configs");
-        Widgets::TextMuted("Coming in a later iteration.");
+        Widgets::SectionHeader("Config");
+
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Style::RowInnerPad);
+        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - Style::RowInnerPad * 2);
+        ImGui::InputText("##cfg_name", g_configNameBuf, sizeof(g_configNameBuf));
+
+        ImGui::Dummy(ImVec2(0, 6));
+
+        const float availW = ImGui::GetContentRegionAvail().x;
+        const float btnW = (availW - Style::RowInnerPad * 2 - 12) / 3.0f;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Style::RowInnerPad);
+
+        if (ImGui::Button("Save", ImVec2(btnW, 0))) {
+            if (g_configNameBuf[0]) ConfigManager::Save(g_configNameBuf);
+        }
+        ImGui::SameLine(0, 6);
+
+        if (ImGui::Button("Load", ImVec2(btnW, 0))) {
+            if (g_configNameBuf[0]) ConfigManager::Load(g_configNameBuf);
+        }
+        ImGui::SameLine(0, 6);
+
+        if (ImGui::Button("Delete", ImVec2(btnW, 0))) {
+            if (g_configNameBuf[0] && ConfigManager::Exists(g_configNameBuf)) {
+                g_pendingDelete = g_configNameBuf;
+                ImGui::OpenPopup("Delete Config");
+            }
+        }
+
+        if (ImGui::BeginPopupModal("Delete Config", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Delete \"%s\"?", g_pendingDelete.c_str());
+            ImGui::Dummy(ImVec2(0, 8));
+
+            if (ImGui::Button("Yes", ImVec2(80, 0))) {
+                ConfigManager::Delete(g_pendingDelete);
+                g_pendingDelete.clear();
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("No", ImVec2(80, 0))) {
+                g_pendingDelete.clear();
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        ImGui::Dummy(ImVec2(0, 14));
+        Widgets::SectionHeader("Saved");
+
+        ImGui::BeginChild("##cfg_list", ImVec2(0, 0), true);
+        {
+            const auto configs = ConfigManager::List();
+            const std::string current = ConfigManager::GetCurrentName();
+
+            if (configs.empty()) {
+                Widgets::TextMuted("No configs saved yet.");
+            }
+            else {
+                for (const auto& name : configs) {
+                    const bool isCurrent = (name == current);
+                    ImGui::PushID(name.c_str());
+                    if (ImGui::Selectable(name.c_str(), isCurrent)) {
+                        ConfigManager::Load(name);
+                        strncpy_s(g_configNameBuf, name.c_str(), sizeof(g_configNameBuf) - 1);
+                    }
+                    ImGui::PopID();
+                }
+            }
+        }
+        ImGui::EndChild();
     }
 
     static void DrawMenu() {
@@ -333,8 +387,8 @@ namespace Renderer {
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 16));
 
-            const char* titles[] = { "Legit",   "Players",        "World",          "Misc",          "Config" };
-            const char* subtitles[] = { "aim assist", "visuals & chams", "world effects", "miscellaneous", "settings" };
+            const char* titles[] = { "Legit",   "Visuals",        "World",          "Misc",          "Config" };
+            const char* subtitles[] = { "aim assist", "visual effects", "world effects", "miscellaneous", "settings" };
 
             for (int i = 0; i < 5; i++) {
                 Widgets::SidebarItem(titles[i], subtitles[i], &g_activeTab, i);
@@ -350,7 +404,7 @@ namespace Renderer {
             ImGui::Dummy(ImVec2(0, 6));
             switch (g_activeTab) {
             case 0: DrawLegitTab();   break;
-            case 1: DrawPlayersTab(); break;
+            case 1: DrawVisualsTab(); break;
             case 2: DrawWorldTab();   break;
             case 3: DrawMiscTab();    break;
             case 4: DrawConfigTab();  break;
@@ -367,7 +421,6 @@ namespace Renderer {
         g_swapChain = swapChain;
 
         if (FAILED(swapChain->GetDevice(__uuidof(ID3D11Device), (void**)&g_device))) {
-            printf("[Renderer] GetDevice failed\n"); fflush(stdout);
             return false;
         }
         g_device->GetImmediateContext(&g_context);
@@ -375,13 +428,9 @@ namespace Renderer {
         DXGI_SWAP_CHAIN_DESC desc;
         swapChain->GetDesc(&desc);
         g_window = desc.OutputWindow;
-        printf("[Renderer] Game HWND = 0x%p\n", g_window); fflush(stdout);
 
         CreateRenderTarget();
-        if (!g_renderTarget) {
-            printf("[Renderer] CreateRenderTarget failed\n"); fflush(stdout);
-            return false;
-        }
+        if (!g_renderTarget) return false;
 
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
@@ -398,10 +447,10 @@ namespace Renderer {
         g_originalWndProc = (WNDPROC)SetWindowLongPtrA(g_window, GWLP_WNDPROC, (LONG_PTR)hkWndProc);
 
         InitSDL();
+        ConfigManager::AutoLoad();
 
         g_initialized = true;
         g_alpha = 0.0f;
-        printf("[Renderer] ImGui initialized\n"); fflush(stdout);
         return true;
     }
 
@@ -413,6 +462,7 @@ namespace Renderer {
         }
 
         UpdateMouseState();
+        Removals::Update();
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -457,4 +507,5 @@ namespace Renderer {
     void RequestUnload() { g_unloadRequested = true; }
     bool ShouldUnload() { return g_readyToUnload; }
     int  GetMenuKey() { return g_menuKey; }
+    void SetMenuKey(int key) { g_menuKey = key; }
 }

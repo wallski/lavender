@@ -124,8 +124,6 @@ namespace PresentHook {
     }
 
     bool Initialize() {
-        printf("[PresentHook] Creating dummy swapchain...\n"); fflush(stdout);
-
         WNDCLASSEXA wc = { 0 };
         wc.cbSize = sizeof(wc);
         wc.lpfnWndProc = DefWindowProcA;
@@ -133,9 +131,9 @@ namespace PresentHook {
         wc.lpszClassName = "LavenderDummyWnd";
         RegisterClassExA(&wc);
 
-        HWND hWnd = CreateWindowExA(0, "LavenderDummyWnd", "", WS_OVERLAPPEDWINDOW, 0, 0, 100, 100, nullptr, nullptr, wc.hInstance, nullptr);
+        HWND hWnd = CreateWindowExA(0, "LavenderDummyWnd", "", WS_OVERLAPPEDWINDOW,
+            0, 0, 100, 100, nullptr, nullptr, wc.hInstance, nullptr);
         if (!hWnd) {
-            printf("[PresentHook] FAILED: CreateWindowExA.\n"); fflush(stdout);
             UnregisterClassA("LavenderDummyWnd", wc.hInstance);
             return false;
         }
@@ -160,7 +158,6 @@ namespace PresentHook {
             &scd, &dummy, &dev, &fl, &ctx);
 
         if (FAILED(hr) || !dummy) {
-            printf("[PresentHook] FAILED: D3D11CreateDeviceAndSwapChain hr=0x%X\n", (unsigned)hr); fflush(stdout);
             if (hWnd) DestroyWindow(hWnd);
             UnregisterClassA("LavenderDummyWnd", wc.hInstance);
             return false;
@@ -176,21 +173,13 @@ namespace PresentHook {
         DestroyWindow(hWnd);
         UnregisterClassA("LavenderDummyWnd", wc.hInstance);
 
-        printf("[PresentHook] Scanning for game swapchains...\n"); fflush(stdout);
         auto candidates = FindAllByVtable(dummyVtable);
-        printf("[PresentHook] Found %zu candidate(s).\n", candidates.size()); fflush(stdout);
 
-        if (candidates.empty()) {
-            printf("[PresentHook] FAILED: no valid swapchain candidates.\n"); fflush(stdout);
-            return false;
-        }
+        if (candidates.empty()) return false;
 
         for (size_t i = 0; i < candidates.size(); i++) {
-            printf("[PresentHook]   [%zu] 0x%p", i, candidates[i]); fflush(stdout);
-
             VmtHook* hook = new VmtHook();
             if (!hook->Initialize(candidates[i])) {
-                printf("  VMT init failed\n"); fflush(stdout);
                 delete hook;
                 continue;
             }
@@ -198,12 +187,8 @@ namespace PresentHook {
             hook->Hook(22, (void*)hkPresent1);
             g_hooks.push_back(hook);
             g_swapchains.push_back(candidates[i]);
-            printf("  hooked\n"); fflush(stdout);
         }
 
-        printf("[PresentHook] Installed %zu hook(s).\n", g_hooks.size()); fflush(stdout);
-        printf("[PresentHook]   original Present  = 0x%p\n", (void*)o_Present); fflush(stdout);
-        printf("[PresentHook]   original Present1 = 0x%p\n", (void*)o_Present1); fflush(stdout);
         return !g_hooks.empty();
     }
 
@@ -212,5 +197,6 @@ namespace PresentHook {
         Renderer::Shutdown();
         for (auto* h : g_hooks) delete h;
         g_hooks.clear();
+        g_swapchains.clear();
     }
 }

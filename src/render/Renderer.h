@@ -11,4 +11,5 @@ namespace Renderer {
     void RequestUnload();
     bool ShouldUnload();
     int  GetMenuKey();
+    void SetMenuKey(int key);
 }
