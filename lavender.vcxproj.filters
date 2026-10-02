@@ -84,6 +84,9 @@
     <ClCompile Include="src\core\features\visuals\skybox\Skybox.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\features\combat\CombatShared.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\memory\PatternScan.h">
@@ -159,6 +162,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\features\visuals\skybox\Skybox.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\features\combat\CombatShared.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

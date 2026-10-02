@@ -7,6 +7,7 @@
 #include "core/features/visuals/chams/Chams.h"
 #include "core/features/visuals/chams/Materials.h"
 #include "core/features/visuals/skybox/Skybox.h"
+#include "core/features/combat/CombatShared.h"
 #include "render/Renderer.h"
 #include <thread>
 #include <cstdarg>
@@ -173,16 +174,12 @@ void MainThread(HMODULE hModule) {
     if (!Materials::Initialize()) {
         Log("[Lavender] Materials failed\n");
     }
-    else {
-        Log("[Lavender] Materials loaded.\n");
+
+    if (!Skybox::Initialize()) {
+        Log("[Lavender] Skybox failed (feature disabled)\n");
     }
 
-    if (Skybox::Initialize()) {
-        Log("[Lavender] Skybox loaded.\n");
-    }
-    else {
-        Log("[Lavender] Skybox failed (feature disabled).\n");
-    }
+    CombatShared::Initialize();
 
     PresentHook::Initialize();
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
@@ -191,15 +188,12 @@ void MainThread(HMODULE hModule) {
     uintptr_t fn = Memory::FindPattern("scenesystem.dll", pattern);
     if (fn) {
         g_sortFn = fn;
-        if (InstallSortHook(fn)) {
-            Log("[Lavender] Sort hook installed.\n");
-        }
-        else {
-            Log("[Lavender] Sort hook failed.\n");
+        if (!InstallSortHook(fn)) {
+            Log("[Lavender] Sort hook failed\n");
         }
     }
     else {
-        Log("[Lavender] Sort pattern not found.\n");
+        Log("[Lavender] Sort pattern not found\n");
     }
 
     Log("[Lavender] Ready.\n");
@@ -210,6 +204,7 @@ void MainThread(HMODULE hModule) {
     }
 
     RestoreSortHook();
+    CombatShared::Shutdown();
     Skybox::Shutdown();
     Materials::Shutdown();
     ConfigManager::Shutdown();

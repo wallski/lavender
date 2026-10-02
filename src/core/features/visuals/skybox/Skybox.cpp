@@ -328,7 +328,7 @@ namespace Skybox {
             return false;
         }
 
-        printf("[Skybox] Ready (materials deferred to FSN).\n");
+        printf("[Skybox] Ready.\n");
         return true;
     }
 
@@ -357,18 +357,17 @@ namespace Skybox {
 
         InterlockedExchange(&g_materials_ready, 1);
 
-        printf("[Skybox] FSN: compiling %d skybox materials...\n",
-            (int)g_entries.size() - 1); fflush(stdout);
-
         int ok = 0;
+        const int total = (int)g_entries.size() - 1;
+
         for (size_t i = 1; i < g_entries.size(); i++) {
-            printf("[Skybox] === %s ===\n", g_entries[i].name.c_str()); fflush(stdout);
             uintptr_t mat = TryBuildMaterial(g_entries[i].path.c_str());
             g_materials[i] = mat;
             if (mat) ok++;
-            printf("[Skybox]   -> 0x%llX\n", (unsigned long long)mat); fflush(stdout);
+            else printf("[Skybox] Failed to compile %s\n", g_entries[i].name.c_str());
         }
-        printf("[Skybox] Compiled %d/%d\n", ok, (int)g_entries.size() - 1); fflush(stdout);
+
+        printf("[Skybox] Compiled %d/%d skyboxes\n", ok, total);
     }
 
     void Shutdown() {

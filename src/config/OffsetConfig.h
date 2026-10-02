@@ -11,6 +11,7 @@ namespace OffsetConfig {
         uintptr_t dwGlobalVars = 0;
         uintptr_t dwGameRules = 0;
         uintptr_t dwInputSystem = 0;
+        uintptr_t dwGameTraceManager = 0;
     };
 
     struct Fields {
@@ -20,6 +21,22 @@ namespace OffsetConfig {
         uint32_t m_vecOrigin = 0;
         uint32_t m_hPlayerPawn = 0;
         uint32_t m_bDormant = 0;
+        uint32_t m_pGameSceneNode = 0;
+        uint32_t m_vecAbsOrigin = 0;
+        uint32_t m_angAbsRotation = 0;
+        uint32_t m_vecViewOffset = 0;
+        uint32_t m_bGunGameImmunity = 0;
+        uint32_t m_bPawnIsAlive = 0;
+        uint32_t m_hPawn = 0;
+        uint32_t m_fFlags = 0;
+        uint32_t m_angEyeAngles = 0;
+        uint32_t m_pAimPunchServices = 0;
+        uint32_t m_pWeaponServices = 0;
+        uint32_t m_hActiveWeapon = 0;
+        uint32_t m_modelState = 0;
+        uint32_t m_pCollision = 0;
+        uint32_t m_vecMins = 0;
+        uint32_t m_vecMaxs = 0;
     };
 
     extern Globals globals;

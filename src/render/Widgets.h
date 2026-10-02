@@ -10,4 +10,7 @@ namespace Widgets {
     bool TopTab(const char* label, int* current, int index);
     void SectionHeader(const char* text);
     void TextMuted(const char* text);
+
+    void BeginCard(const char* title, int rows);
+    void EndCard();
 }

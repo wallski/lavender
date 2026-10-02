@@ -10,6 +10,7 @@
 #include "../core/features/visuals/chams/Materials.h"
 #include "../core/features/visuals/removals/Removals.h"
 #include "../core/features/visuals/skybox/Skybox.h"
+#include "../core/features/combat/CombatShared.h"
 #include "../core/config/ConfigManager.h"
 #include "../core/hooks/InlineHook.h"
 #include "../config/OffsetConfig.h"
@@ -214,103 +215,145 @@ namespace Renderer {
         "None", "Matte", "Flat", "Glow", "Outlines", "Bloom"
     };
 
+    static void DrawCombatDebug() {
+        if (!CombatShared::GetLocalPawn()) return;
+
+        auto enemies = CombatShared::GetEnemies();
+        ImDrawList* d = ImGui::GetBackgroundDrawList();
+
+        for (const auto& e : enemies) {
+            Vec3 screen;
+            if (!CombatShared::WorldToScreen(e.headPos, screen)) continue;
+
+            ImU32 col = e.visible ? IM_COL32(0, 255, 0, 255) : IM_COL32(255, 60, 60, 255);
+            d->AddCircleFilled(ImVec2(screen.x, screen.y), 5.0f, col);
+            d->AddCircle(ImVec2(screen.x, screen.y), 7.0f, IM_COL32(0, 0, 0, 200), 0, 1.5f);
+        }
+    }
+
     static void DrawLegitTab() {
-        Widgets::SectionHeader("Aim");
+        Widgets::BeginCard("AIM", 1);
         Widgets::TextMuted("Coming in a later iteration.");
+        Widgets::EndCard();
     }
 
     static void DrawVisualsTab() {
-        Widgets::SectionHeader("Chams");
-
         bool enabled = Chams::IsEnabled();
+        float* cur = Chams::GetColor();
+        float color[4] = { cur[0], cur[1], cur[2], cur[3] };
+        int mat = (int)Chams::GetMaterial();
+        bool occluded = Chams::IsOccluded();
+
+        Widgets::BeginCard("CHAMS", 4);
+
         if (Widgets::Toggle("Chams", &enabled)) {
             Chams::SetEnabled(enabled);
         }
-
-        float color[4];
-        float* cur = Chams::GetColor();
-        color[0] = cur[0];
-        color[1] = cur[1];
-        color[2] = cur[2];
-        color[3] = cur[3];
         if (Widgets::ColorPicker("Color", color)) {
             Chams::SetColor(color);
         }
-
-        int mat = (int)Chams::GetMaterial();
         if (ImGui::Combo("Material", &mat, kMaterialNames, IM_ARRAYSIZE(kMaterialNames))) {
             Chams::SetMaterial((Materials::Id)mat);
         }
-
-        bool occluded = Chams::IsOccluded();
         if (Widgets::Toggle("Occluded", &occluded)) {
             Chams::SetOccluded(occluded);
         }
+
+        Widgets::EndCard();
     }
 
     static void DrawWorldTab() {
-        Widgets::SectionHeader("Skybox");
-
         bool enabled = Skybox::IsEnabled();
+        int sel = Skybox::GetSelectedIndex();
+        const auto& entries = Skybox::GetEntries();
+
+        std::vector<const char*> names;
+        names.reserve(entries.size());
+        for (const auto& e : entries) names.push_back(e.name.c_str());
+
+        Widgets::BeginCard("SKYBOX", 2);
+
         if (Widgets::Toggle("Custom skybox", &enabled)) {
             Skybox::SetEnabled(enabled);
         }
 
-        const auto& entries = Skybox::GetEntries();
-        if (!entries.empty()) {
-            std::vector<const char*> names;
-            names.reserve(entries.size());
-            for (const auto& e : entries) names.push_back(e.name.c_str());
-
-            int sel = Skybox::GetSelectedIndex();
+        if (!names.empty()) {
             if (ImGui::Combo("Sky", &sel, names.data(), (int)names.size())) {
                 Skybox::SetSelectedIndex(sel);
             }
         }
+
+        Widgets::EndCard();
     }
 
     static void DrawMiscTab() {
-        Widgets::SectionHeader("Menu");
-        Widgets::Keybind("Menu key", &g_menuKey);
-
         float current[4] = { Style::Accent.x, Style::Accent.y, Style::Accent.z, 1.0f };
+
+        Widgets::BeginCard("MENU", 2);
+        Widgets::Keybind("Menu key", &g_menuKey);
         if (Widgets::ColorPicker("Accent color", current)) {
             Style::SetAccent(current[0], current[1], current[2]);
             Style::Apply();
         }
-
-        Widgets::SectionHeader("Removals");
+        Widgets::EndCard();
 
         bool flash = Removals::IsFlashEnabled();
+
+        Widgets::BeginCard("REMOVALS", 1);
         if (Widgets::Toggle("Remove flash", &flash)) {
             Removals::SetFlashEnabled(flash);
         }
+        Widgets::EndCard();
     }
 
     static void DrawConfigTab() {
-        Widgets::SectionHeader("Config");
+        const float sideMargin = 20.0f;
+        const float totalW = ImGui::GetContentRegionAvail().x;
+        const float innerW = totalW - sideMargin * 2;
 
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Style::RowInnerPad);
-        ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - Style::RowInnerPad * 2);
-        ImGui::InputText("##cfg_name", g_configNameBuf, sizeof(g_configNameBuf));
+        ImGui::Dummy(ImVec2(0, 8));
 
-        ImGui::Dummy(ImVec2(0, 6));
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + sideMargin);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(14, 12));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8);
+        ImGui::PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.10f, 0.10f, 0.12f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgHovered, ImVec4(0.12f, 0.12f, 0.145f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBgActive, ImVec4(0.13f, 0.13f, 0.155f, 1.0f));
+        ImGui::SetNextItemWidth(innerW);
+        ImGui::InputTextWithHint("##cfg_name", "config name...", g_configNameBuf, sizeof(g_configNameBuf));
+        ImGui::PopStyleColor(3);
+        ImGui::PopStyleVar(2);
 
-        const float availW = ImGui::GetContentRegionAvail().x;
-        const float btnW = (availW - Style::RowInnerPad * 2 - 6) / 2.0f;
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Style::RowInnerPad);
+        ImGui::Dummy(ImVec2(0, 8));
 
+        const float btnW = (innerW - 8) * 0.5f;
+        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + sideMargin);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(0, 12));
+        ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 8);
+
+        const ImVec4 accent = Style::Accent;
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(accent.x, accent.y, accent.z, 0.75f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(accent.x, accent.y, accent.z, 0.95f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(accent.x * 0.85f, accent.y * 0.85f, accent.z * 0.85f, 1.0f));
         if (ImGui::Button("Save", ImVec2(btnW, 0))) {
             if (g_configNameBuf[0]) ConfigManager::Save(g_configNameBuf);
         }
-        ImGui::SameLine(0, 6);
+        ImGui::PopStyleColor(3);
 
+        ImGui::SameLine(0, 8);
+
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.13f, 0.13f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.22f, 0.10f, 0.10f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.35f, 0.13f, 0.13f, 1.0f));
         if (ImGui::Button("Delete", ImVec2(btnW, 0))) {
             if (g_configNameBuf[0] && ConfigManager::Exists(g_configNameBuf)) {
                 g_pendingDelete = g_configNameBuf;
                 ImGui::OpenPopup("Delete Config");
             }
         }
+        ImGui::PopStyleColor(3);
+
+        ImGui::PopStyleVar(2);
 
         if (ImGui::BeginPopupModal("Delete Config", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::Text("Delete \"%s\"?", g_pendingDelete.c_str());
@@ -329,30 +372,68 @@ namespace Renderer {
             ImGui::EndPopup();
         }
 
-        ImGui::Dummy(ImVec2(0, 14));
+        ImGui::Dummy(ImVec2(0, 18));
         Widgets::SectionHeader("Saved");
 
-        ImGui::BeginChild("##cfg_list", ImVec2(0, 0), true);
-        {
-            const auto configs = ConfigManager::List();
-            const std::string current = ConfigManager::GetCurrentName();
+        const auto configs = ConfigManager::List();
+        const std::string current = ConfigManager::GetCurrentName();
 
-            if (configs.empty()) {
-                Widgets::TextMuted("No configs saved yet.");
-            }
-            else {
-                for (const auto& name : configs) {
-                    const bool isCurrent = (name == current);
-                    ImGui::PushID(name.c_str());
-                    if (ImGui::Selectable(name.c_str(), isCurrent)) {
-                        ConfigManager::Load(name);
-                        strncpy_s(g_configNameBuf, name.c_str(), sizeof(g_configNameBuf) - 1);
-                    }
-                    ImGui::PopID();
+        if (configs.empty()) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + sideMargin);
+            Widgets::TextMuted("no configs saved yet");
+        }
+        else {
+            for (const auto& name : configs) {
+                ImGui::PushID(name.c_str());
+
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + sideMargin);
+
+                const ImVec2 startPos = ImGui::GetCursorScreenPos();
+                ImGui::InvisibleButton("##row", ImVec2(innerW, 40.0f));
+                const bool clicked = ImGui::IsItemClicked();
+                const bool hovered = ImGui::IsItemHovered();
+                const bool isCurrent = (name == current);
+
+                ImDrawList* d = ImGui::GetWindowDrawList();
+                const ImVec2 bgMin = startPos;
+                const ImVec2 bgMax(startPos.x + innerW, startPos.y + 40.0f);
+
+                ImU32 bg;
+                if (isCurrent) {
+                    bg = ImGui::GetColorU32(ImVec4(accent.x, accent.y, accent.z, 0.14f));
                 }
+                else if (hovered) {
+                    bg = ImGui::GetColorU32(ImVec4(1, 1, 1, 0.05f));
+                }
+                else {
+                    bg = ImGui::GetColorU32(ImVec4(1, 1, 1, 0.028f));
+                }
+                d->AddRectFilled(bgMin, bgMax, bg, 8.0f);
+
+                if (isCurrent) {
+                    d->AddRectFilled(
+                        ImVec2(bgMin.x, bgMin.y + 10),
+                        ImVec2(bgMin.x + 3, bgMax.y - 10),
+                        ImGui::GetColorU32(accent), 1.5f);
+                }
+
+                const ImVec2 ts = ImGui::CalcTextSize(name.c_str());
+                const ImU32 textCol = isCurrent
+                    ? ImGui::GetColorU32(Style::Text)
+                    : ImGui::GetColorU32(ImVec4(Style::Text.x, Style::Text.y, Style::Text.z, 0.85f));
+                d->AddText(
+                    ImVec2(bgMin.x + 18, bgMin.y + 20.0f - ts.y * 0.5f),
+                    textCol, name.c_str());
+
+                if (clicked) {
+                    ConfigManager::Load(name);
+                    strncpy_s(g_configNameBuf, name.c_str(), sizeof(g_configNameBuf) - 1);
+                }
+
+                ImGui::Dummy(ImVec2(0, 6));
+                ImGui::PopID();
             }
         }
-        ImGui::EndChild();
     }
 
     static void DrawMenu() {
@@ -479,6 +560,7 @@ namespace Renderer {
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
+        DrawCombatDebug();
         DrawMenu();
 
         ImGui::Render();

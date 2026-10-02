@@ -3,11 +3,19 @@
 #include "Style.h"
 #include "imgui_internal.h"
 #include <unordered_map>
+#include <vector>
 
 namespace Widgets {
 
     static std::unordered_map<ImGuiID, float> g_toggleAnim;
     static std::unordered_map<ImGuiID, float> g_hoverAnim;
+
+    struct CardFrame {
+        ImVec2 start;
+        float width;
+        float height;
+    };
+    static std::vector<CardFrame> s_cardStack;
 
     static void DrawRowHover(ImVec2 pos, float width, float height, float hoverAnim) {
         if (hoverAnim < 0.005f) return;
@@ -309,5 +317,43 @@ namespace Widgets {
         ImGui::PushStyleColor(ImGuiCol_Text, Style::TextDim);
         ImGui::TextUnformatted(text);
         ImGui::PopStyleColor();
+    }
+
+    void BeginCard(const char* title, int rows) {
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing,
+            ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
+
+        ImDrawList* d = ImGui::GetWindowDrawList();
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        float avail = ImGui::GetContentRegionAvail().x;
+
+        const float headerH = 26.0f;
+        const float padY = 4.0f;
+        float cardH = headerH + padY * 2 + rows * Style::RowHeight;
+
+        d->AddRectFilled(pos, ImVec2(pos.x + avail, pos.y + cardH),
+            ImGui::GetColorU32(ImVec4(1, 1, 1, 0.025f)), Style::RoundingSm);
+        d->AddRect(pos, ImVec2(pos.x + avail, pos.y + cardH),
+            ImGui::GetColorU32(ImVec4(Style::Border.x, Style::Border.y, Style::Border.z, 0.55f)),
+            Style::RoundingSm);
+
+        ImGui::PushFont(Style::Medium());
+        ImVec2 ts = ImGui::CalcTextSize(title);
+        ImVec2 titlePos(pos.x + Style::RowInnerPad, pos.y + headerH * 0.5f - ts.y * 0.5f);
+        d->AddText(titlePos, ImGui::GetColorU32(Style::TextMuted), title);
+        ImGui::PopFont();
+
+        s_cardStack.push_back({ pos, avail, cardH });
+
+        ImGui::Dummy(ImVec2(0, headerH + padY));
+    }
+
+    void EndCard() {
+        if (s_cardStack.empty()) return;
+        s_cardStack.pop_back();
+
+        ImGui::PopStyleVar();
+
+        ImGui::Dummy(ImVec2(0, 10.0f));
     }
 }

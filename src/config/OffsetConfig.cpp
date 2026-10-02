@@ -124,6 +124,22 @@ namespace OffsetConfig {
             if (ExtractHppConstant(hpp, "m_vecOrigin", v)) fields.m_vecOrigin = (uint32_t)v;
             if (ExtractHppConstant(hpp, "m_hPlayerPawn", v)) fields.m_hPlayerPawn = (uint32_t)v;
             if (ExtractHppConstant(hpp, "m_bDormant", v)) fields.m_bDormant = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_pGameSceneNode", v)) fields.m_pGameSceneNode = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_vecAbsOrigin", v)) fields.m_vecAbsOrigin = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_angAbsRotation", v)) fields.m_angAbsRotation = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_vecViewOffset", v)) fields.m_vecViewOffset = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_bGunGameImmunity", v)) fields.m_bGunGameImmunity = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_bPawnIsAlive", v)) fields.m_bPawnIsAlive = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_hPawn", v)) fields.m_hPawn = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_fFlags", v)) fields.m_fFlags = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_angEyeAngles", v)) fields.m_angEyeAngles = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_pAimPunchServices", v)) fields.m_pAimPunchServices = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_pWeaponServices", v)) fields.m_pWeaponServices = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_hActiveWeapon", v)) fields.m_hActiveWeapon = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_modelState", v)) fields.m_modelState = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_pCollision", v)) fields.m_pCollision = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_vecMins", v)) fields.m_vecMins = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_vecMaxs", v)) fields.m_vecMaxs = (uint32_t)v;
         }
         else {
             printf("[OffsetConfig] WARN: cannot read %s\n", hppPath.c_str()); fflush(stdout);
@@ -163,9 +179,13 @@ namespace OffsetConfig {
 
         if (!globals.dwInputSystem) {
             globals.dwInputSystem = ResolveMovRip("inputsystem.dll", "48 8B 0D ? ? ? ? 48 8B 01 FF 50");
-            if (globals.dwInputSystem) {
-                printf("[OffsetConfig] dwInputSystem fallback resolved to 0x%llX\n", (unsigned long long)globals.dwInputSystem);
-            }
+        }
+
+        uintptr_t gtm = Memory::FindPattern("client.dll", "48 8B 0D ? ? ? ? 48 8D 34 52");
+        if (gtm) {
+            int32_t rel = *reinterpret_cast<int32_t*>(gtm + 3);
+            uintptr_t resolved = gtm + 7 + rel;
+            globals.dwGameTraceManager = *reinterpret_cast<uintptr_t*>(resolved);
         }
 
         printf("[OffsetConfig] Resolved absolute addresses:\n");
@@ -176,6 +196,7 @@ namespace OffsetConfig {
         printf("  dwGameRules             = 0x%llX\n", (unsigned long long)globals.dwGameRules);
         printf("  dwGlobalVars            = 0x%llX\n", (unsigned long long)globals.dwGlobalVars);
         printf("  dwInputSystem           = 0x%llX\n", (unsigned long long)globals.dwInputSystem);
+        printf("  dwGameTraceManager      = 0x%llX\n", (unsigned long long)globals.dwGameTraceManager);
         fflush(stdout);
     }
 }
