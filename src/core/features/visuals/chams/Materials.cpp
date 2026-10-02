@@ -256,6 +256,10 @@ namespace Materials {
         for (auto& m : g_materials) m = 0;
     }
 
+    uintptr_t Compile(const char* kv, const char* name) {
+        return LoadMaterial(kv, name);
+    }
+
     uintptr_t Get(Id id) {
         const int i = (int)id;
         if (i < 0 || i >= (int)Id::Count) return 0;

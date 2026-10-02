@@ -6,6 +6,7 @@
 #include "core/memory/PatternScan.h"
 #include "core/features/visuals/chams/Chams.h"
 #include "core/features/visuals/chams/Materials.h"
+#include "core/features/visuals/skybox/Skybox.h"
 #include "render/Renderer.h"
 #include <thread>
 #include <cstdarg>
@@ -176,6 +177,13 @@ void MainThread(HMODULE hModule) {
         Log("[Lavender] Materials loaded.\n");
     }
 
+    if (Skybox::Initialize()) {
+        Log("[Lavender] Skybox loaded.\n");
+    }
+    else {
+        Log("[Lavender] Skybox failed (feature disabled).\n");
+    }
+
     PresentHook::Initialize();
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
 
@@ -202,6 +210,7 @@ void MainThread(HMODULE hModule) {
     }
 
     RestoreSortHook();
+    Skybox::Shutdown();
     Materials::Shutdown();
     ConfigManager::Shutdown();
     PresentHook::Shutdown();

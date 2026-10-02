@@ -21,6 +21,8 @@ namespace Materials {
     bool Initialize();
     void Shutdown();
 
+    uintptr_t Compile(const char* kv, const char* name);
+
     uintptr_t Get(Id id);
     const char* GetName(Id id);
     int GetCount();

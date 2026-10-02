@@ -3,6 +3,7 @@
 #include "../features/visuals/chams/Chams.h"
 #include "../features/visuals/chams/Materials.h"
 #include "../features/visuals/removals/Removals.h"
+#include "../features/visuals/skybox/Skybox.h"
 #include "../../render/Renderer.h"
 #include "../../render/Style.h"
 #include <filesystem>
@@ -31,15 +32,6 @@ namespace ConfigManager {
         return g_directory + "\\" + name + ".lav";
     }
 
-    static std::string LastPath() {
-        return g_directory + "\\_last.txt";
-    }
-
-    static void WriteLast() {
-        std::ofstream f(LastPath(), std::ios::trunc);
-        if (f.is_open()) f << g_currentName;
-    }
-
     static bool ParseBool(const std::string& s) {
         return s == "1" || s == "true";
     }
@@ -62,17 +54,6 @@ namespace ConfigManager {
     }
 
     void Shutdown() {}
-
-    void AutoLoad() {
-        std::ifstream last(LastPath());
-        if (!last.is_open()) return;
-        std::string name;
-        std::getline(last, name);
-        last.close();
-        if (name.empty()) return;
-        if (!Exists(name)) return;
-        Load(name);
-    }
 
     bool Exists(const std::string& name) {
         if (name.empty()) return false;
@@ -111,13 +92,15 @@ namespace ConfigManager {
 
         f << "removals.flash=" << (Removals::IsFlashEnabled() ? 1 : 0) << "\n";
 
+        f << "world.skybox_enabled=" << (Skybox::IsEnabled() ? 1 : 0) << "\n";
+        f << "world.skybox_index=" << Skybox::GetSelectedIndex() << "\n";
+
         f << "menu.key=" << Renderer::GetMenuKey() << "\n";
         f << "menu.accent_r=" << Style::Accent.x << "\n";
         f << "menu.accent_g=" << Style::Accent.y << "\n";
         f << "menu.accent_b=" << Style::Accent.z << "\n";
 
         g_currentName = name;
-        WriteLast();
         return true;
     }
 
@@ -130,6 +113,8 @@ namespace ConfigManager {
         bool chamsOccluded = false;
         float chamsColor[4] = { 0.0f, 1.0f, 0.4f, 1.0f };
         bool removalsFlash = false;
+        bool skyboxEnabled = false;
+        int skyboxIndex = 0;
         int menuKey = VK_DELETE;
         float accent[3] = { Style::Accent.x, Style::Accent.y, Style::Accent.z };
 
@@ -155,6 +140,8 @@ namespace ConfigManager {
             else if (key == "chams.color_b") chamsColor[2] = ParseFloat(val, chamsColor[2]);
             else if (key == "chams.color_a") chamsColor[3] = ParseFloat(val, chamsColor[3]);
             else if (key == "removals.flash") removalsFlash = ParseBool(val);
+            else if (key == "world.skybox_enabled") skyboxEnabled = ParseBool(val);
+            else if (key == "world.skybox_index") skyboxIndex = ParseInt(val, skyboxIndex);
             else if (key == "menu.key") menuKey = ParseInt(val, menuKey);
             else if (key == "menu.accent_r") accent[0] = ParseFloat(val, accent[0]);
             else if (key == "menu.accent_g") accent[1] = ParseFloat(val, accent[1]);
@@ -166,12 +153,13 @@ namespace ConfigManager {
         Chams::SetOccluded(chamsOccluded);
         Chams::SetColor(chamsColor);
         Removals::SetFlashEnabled(removalsFlash);
+        Skybox::SetEnabled(skyboxEnabled);
+        Skybox::SetSelectedIndex(skyboxIndex);
         Renderer::SetMenuKey(menuKey);
         Style::SetAccent(accent[0], accent[1], accent[2]);
         Style::Apply();
 
         g_currentName = name;
-        WriteLast();
         return true;
     }
 

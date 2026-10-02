@@ -5,7 +5,6 @@
 namespace ConfigManager {
     bool Initialize();
     void Shutdown();
-    void AutoLoad();
 
     bool Save(const std::string& name);
     bool Load(const std::string& name);

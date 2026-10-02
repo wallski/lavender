@@ -9,6 +9,7 @@
 #include "../core/features/visuals/chams/Chams.h"
 #include "../core/features/visuals/chams/Materials.h"
 #include "../core/features/visuals/removals/Removals.h"
+#include "../core/features/visuals/skybox/Skybox.h"
 #include "../core/config/ConfigManager.h"
 #include "../core/hooks/InlineHook.h"
 #include "../config/OffsetConfig.h"
@@ -249,7 +250,23 @@ namespace Renderer {
 
     static void DrawWorldTab() {
         Widgets::SectionHeader("Skybox");
-        Widgets::TextMuted("Coming in a later iteration.");
+
+        bool enabled = Skybox::IsEnabled();
+        if (Widgets::Toggle("Custom skybox", &enabled)) {
+            Skybox::SetEnabled(enabled);
+        }
+
+        const auto& entries = Skybox::GetEntries();
+        if (!entries.empty()) {
+            std::vector<const char*> names;
+            names.reserve(entries.size());
+            for (const auto& e : entries) names.push_back(e.name.c_str());
+
+            int sel = Skybox::GetSelectedIndex();
+            if (ImGui::Combo("Sky", &sel, names.data(), (int)names.size())) {
+                Skybox::SetSelectedIndex(sel);
+            }
+        }
     }
 
     static void DrawMiscTab() {
@@ -280,16 +297,11 @@ namespace Renderer {
         ImGui::Dummy(ImVec2(0, 6));
 
         const float availW = ImGui::GetContentRegionAvail().x;
-        const float btnW = (availW - Style::RowInnerPad * 2 - 12) / 3.0f;
+        const float btnW = (availW - Style::RowInnerPad * 2 - 6) / 2.0f;
         ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Style::RowInnerPad);
 
         if (ImGui::Button("Save", ImVec2(btnW, 0))) {
             if (g_configNameBuf[0]) ConfigManager::Save(g_configNameBuf);
-        }
-        ImGui::SameLine(0, 6);
-
-        if (ImGui::Button("Load", ImVec2(btnW, 0))) {
-            if (g_configNameBuf[0]) ConfigManager::Load(g_configNameBuf);
         }
         ImGui::SameLine(0, 6);
 
@@ -447,7 +459,6 @@ namespace Renderer {
         g_originalWndProc = (WNDPROC)SetWindowLongPtrA(g_window, GWLP_WNDPROC, (LONG_PTR)hkWndProc);
 
         InitSDL();
-        ConfigManager::AutoLoad();
 
         g_initialized = true;
         g_alpha = 0.0f;
