@@ -8,9 +8,7 @@ namespace CombatShared {
 
     static uintptr_t g_traceRayFn = 0;
     static uintptr_t g_traceFilterInitFn = 0;
-    static uintptr_t g_usercmdBaseFn = 0;
-    static uintptr_t g_usercmdGetFn = 0;
-    static uintptr_t g_processInputEventFn = 0;
+    static volatile LONG g_includeTeammates = 0;
     static volatile LONG64 g_frame_counter = 0;
 
     static uintptr_t ReadPtr(uintptr_t addr) {
@@ -49,22 +47,16 @@ namespace CombatShared {
         g_traceFilterInitFn = Memory::FindPattern("client.dll",
             "48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 0F B6 41 ?? 33 FF 24");
 
-        g_usercmdBaseFn = Memory::FindPattern("client.dll",
-            "48 83 EC 28 E8 ? ? ? ? 8B 80 10 59 00 00");
-        g_usercmdGetFn = Memory::FindPattern("client.dll",
-            "40 53 48 83 EC 20 8B DA E8 ? ? ? ? 4C 8B C0");
-        g_processInputEventFn = Memory::FindPattern("client.dll",
-            "48 89 5C 24 08 57 48 83 EC 20 C6 41 08 00 48 8D 05 ? ? ? ? 48 89 01 48 8B D9");
-
         printf("[CombatShared] trace_ray=0x%llX filter_init=0x%llX\n",
             (unsigned long long)g_traceRayFn, (unsigned long long)g_traceFilterInitFn);
-        printf("[CombatShared] usercmd_base=0x%llX usercmd_get=0x%llX process_input=0x%llX\n",
-            (unsigned long long)g_usercmdBaseFn, (unsigned long long)g_usercmdGetFn,
-            (unsigned long long)g_processInputEventFn);
         fflush(stdout);
     }
 
     void Shutdown() {}
+
+    void SetIncludeTeammates(bool v) {
+        InterlockedExchange(&g_includeTeammates, v ? 1 : 0);
+    }
 
     uintptr_t GetLocalPawn() {
         if (!OffsetConfig::globals.dwLocalPlayerPawn) return 0;
@@ -217,6 +209,7 @@ namespace CombatShared {
         if (!localPawn) return out;
 
         int localTeam = ReadInt(localPawn + OffsetConfig::fields.m_iTeamNum);
+        const bool includeTeammates = (g_includeTeammates != 0);
 
         for (int i = 0; i < 2048; i++) {
             uintptr_t entity = GetEntityByIndex(i);
@@ -231,7 +224,7 @@ namespace CombatShared {
             if (health <= 0) continue;
 
             int team = ReadInt(entity + OffsetConfig::fields.m_iTeamNum);
-            if (team == localTeam) continue;
+            if (!includeTeammates && team == localTeam) continue;
 
             Enemy e{};
             e.pawn = entity;
@@ -245,7 +238,14 @@ namespace CombatShared {
             }
 
             GetBonePosition(entity, 7, e.headPos);
+            GetBonePosition(entity, 6, e.neckPos);
             GetBonePosition(entity, 4, e.chestPos);
+            GetBonePosition(entity, 2, e.stomachPos);
+            GetBonePosition(entity, 1, e.pelvisPos);
+            GetBonePosition(entity, 9, e.leftArmPos);
+            GetBonePosition(entity, 13, e.rightArmPos);
+            GetBonePosition(entity, 18, e.leftLegPos);
+            GetBonePosition(entity, 21, e.rightLegPos);
 
             Vec3 eye;
             if (GetEyePosition(localPawn, eye)) {

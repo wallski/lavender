@@ -11,8 +11,11 @@ namespace Triggerbot {
     int GetKey();
     void SetKey(int key);
 
-    bool GetHeadOnly();
-    void SetHeadOnly(bool headOnly);
+    bool GetTeamCheck();
+    void SetTeamCheck(bool v);
+
+    uint32_t GetHitboxes();
+    void SetHitboxes(uint32_t v);
 
     int GetDelayMs();
     void SetDelayMs(int ms);

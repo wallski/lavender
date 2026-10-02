@@ -53,9 +53,18 @@ namespace CombatShared {
         int       team;
         Vec3      origin;
         Vec3      headPos;
+        Vec3      neckPos;
         Vec3      chestPos;
+        Vec3      stomachPos;
+        Vec3      pelvisPos;
+        Vec3      leftArmPos;
+        Vec3      rightArmPos;
+        Vec3      leftLegPos;
+        Vec3      rightLegPos;
         bool      visible;
     };
+
+    void SetIncludeTeammates(bool v);
 
     std::vector<Enemy> GetEnemies();
 

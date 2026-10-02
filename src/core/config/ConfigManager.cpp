@@ -98,7 +98,8 @@ namespace ConfigManager {
 
         f << "trigger.enabled=" << (Triggerbot::IsEnabled() ? 1 : 0) << "\n";
         f << "trigger.key=" << Triggerbot::GetKey() << "\n";
-        f << "trigger.head_only=" << (Triggerbot::GetHeadOnly() ? 1 : 0) << "\n";
+        f << "trigger.team_check=" << (Triggerbot::GetTeamCheck() ? 1 : 0) << "\n";
+        f << "trigger.hitboxes=" << (unsigned int)Triggerbot::GetHitboxes() << "\n";
         f << "trigger.delay=" << Triggerbot::GetDelayMs() << "\n";
 
         f << "menu.key=" << Renderer::GetMenuKey() << "\n";
@@ -123,8 +124,9 @@ namespace ConfigManager {
         int skyboxIndex = 0;
         bool triggerEnabled = false;
         int triggerKey = VK_XBUTTON2;
-        bool triggerHeadOnly = true;
-        int triggerDelay = 50;
+        bool triggerTeamCheck = true;
+        unsigned int triggerHitboxes = 1;
+        int triggerDelay = 60;
         int menuKey = VK_DELETE;
         float accent[3] = { Style::Accent.x, Style::Accent.y, Style::Accent.z };
 
@@ -154,7 +156,8 @@ namespace ConfigManager {
             else if (key == "world.skybox_index") skyboxIndex = ParseInt(val, skyboxIndex);
             else if (key == "trigger.enabled") triggerEnabled = ParseBool(val);
             else if (key == "trigger.key") triggerKey = ParseInt(val, triggerKey);
-            else if (key == "trigger.head_only") triggerHeadOnly = ParseBool(val);
+            else if (key == "trigger.team_check") triggerTeamCheck = ParseBool(val);
+            else if (key == "trigger.hitboxes") triggerHitboxes = (unsigned int)ParseInt(val, (int)triggerHitboxes);
             else if (key == "trigger.delay") triggerDelay = ParseInt(val, triggerDelay);
             else if (key == "menu.key") menuKey = ParseInt(val, menuKey);
             else if (key == "menu.accent_r") accent[0] = ParseFloat(val, accent[0]);
@@ -171,7 +174,8 @@ namespace ConfigManager {
         Skybox::SetSelectedIndex(skyboxIndex);
         Triggerbot::SetEnabled(triggerEnabled);
         Triggerbot::SetKey(triggerKey);
-        Triggerbot::SetHeadOnly(triggerHeadOnly);
+        Triggerbot::SetTeamCheck(triggerTeamCheck);
+        Triggerbot::SetHitboxes(triggerHitboxes);
         Triggerbot::SetDelayMs(triggerDelay);
         Renderer::SetMenuKey(menuKey);
         Style::SetAccent(accent[0], accent[1], accent[2]);

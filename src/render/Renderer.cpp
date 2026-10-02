@@ -216,13 +216,18 @@ namespace Renderer {
         "None", "Matte", "Flat", "Glow", "Outlines", "Bloom"
     };
 
+    static const char* kHitboxNames[] = {
+        "Head", "Neck", "Chest", "Stomach", "Pelvis", "Arms", "Legs"
+    };
+
     static void DrawLegitTab() {
         bool enabled = Triggerbot::IsEnabled();
         int key = Triggerbot::GetKey();
-        bool headOnly = Triggerbot::GetHeadOnly();
+        bool teamCheck = Triggerbot::GetTeamCheck();
+        uint32_t hitboxes = Triggerbot::GetHitboxes();
         int delay = Triggerbot::GetDelayMs();
 
-        Widgets::BeginCard("TRIGGERBOT", 4);
+        Widgets::BeginCard("TRIGGERBOT", 3);
 
         if (Widgets::Toggle("Enabled", &enabled)) {
             Triggerbot::SetEnabled(enabled);
@@ -230,13 +235,30 @@ namespace Renderer {
         if (Widgets::Keybind("Trigger key", &key)) {
             Triggerbot::SetKey(key);
         }
-        if (Widgets::Toggle("Head only", &headOnly)) {
-            Triggerbot::SetHeadOnly(headOnly);
-        }
-        if (Widgets::SliderInt("Delay", &delay, 0, 250)) {
-            Triggerbot::SetDelayMs(delay);
+        if (Widgets::Toggle("Team check", &teamCheck)) {
+            Triggerbot::SetTeamCheck(teamCheck);
         }
 
+        Widgets::EndCard();
+
+        Widgets::BeginCard("HITBOXES", 7);
+        for (int i = 0; i < 7; i++) {
+            bool on = (hitboxes & (1u << i)) != 0;
+            if (Widgets::Toggle(kHitboxNames[i], &on)) {
+                uint32_t next = hitboxes;
+                if (on) next |= (1u << i);
+                else    next &= ~(1u << i);
+                if (next == 0) next = 1u << i;
+                hitboxes = next;
+                Triggerbot::SetHitboxes(hitboxes);
+            }
+        }
+        Widgets::EndCard();
+
+        Widgets::BeginCard("TIMING", 1);
+        if (Widgets::SliderInt("On-target ms", &delay, 0, 1000)) {
+            Triggerbot::SetDelayMs(delay);
+        }
         Widgets::EndCard();
     }
 

@@ -11,20 +11,17 @@ namespace Triggerbot {
 
     static volatile LONG g_enabled = 0;
     static volatile LONG g_key = VK_XBUTTON2;
-    static volatile LONG g_headOnly = 1;
-    static volatile LONG g_delay_ms = 50;
+    static volatile LONG g_teamCheck = 1;
+    static volatile LONG g_hitboxes = 0x01;
+    static volatile LONG g_delay_ms = 60;
 
     static uintptr_t g_getUsercmdBaseFn = 0;
     static uintptr_t g_getUsercmdFn = 0;
 
     static std::atomic<bool> g_shouldFire{ false };
     static std::atomic<bool> g_attackCurrentlyWritten{ false };
-    static ULONGLONG g_releaseAt = 0;
+    static ULONGLONG g_onTargetSince = 0;
     static ULONGLONG g_nextFireAllowed = 0;
-
-    static volatile LONG g_writeCount = 0;
-    static volatile LONG g_pbSeenCount = 0;
-    static volatile LONG g_lastHasTarget = -1;
 
     static uintptr_t g_createMoveFn = 0;
     static uint8_t* g_createMoveTrampoline = nullptr;
@@ -34,6 +31,14 @@ namespace Triggerbot {
     static bool g_createMoveHookInstalled = false;
 
     static constexpr uintptr_t kMessageImplOffset = 0x10;
+
+    static constexpr uint32_t HB_HEAD = 1u << 0;
+    static constexpr uint32_t HB_NECK = 1u << 1;
+    static constexpr uint32_t HB_CHEST = 1u << 2;
+    static constexpr uint32_t HB_STOMACH = 1u << 3;
+    static constexpr uint32_t HB_PELVIS = 1u << 4;
+    static constexpr uint32_t HB_ARMS = 1u << 5;
+    static constexpr uint32_t HB_LEGS = 1u << 6;
 
     struct HasBits { uint32_t bits; };
 
@@ -151,11 +156,21 @@ namespace Triggerbot {
     }
 
     static void WriteAttack(bool pressed) {
+        if (!OffsetConfig::globals.dwLocalPlayerPawn) return;
+        uintptr_t localPawn = 0;
+        __try { localPawn = *(uintptr_t*)OffsetConfig::globals.dwLocalPlayerPawn; }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return; }
+        if (localPawn < 0x10000) return;
+
         UsercmdLayout* cmd = GetCurrentUsercmd();
         if (!cmd) return;
-        if (!cmd->pb.base) return;
 
-        BaseUsercmdPb* base = (BaseUsercmdPb*)((uintptr_t)cmd->pb.base + kMessageImplOffset);
+        uintptr_t pbRaw = 0;
+        __try { pbRaw = (uintptr_t)cmd->pb.base; }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return; }
+        if (!pbRaw) return;
+
+        BaseUsercmdPb* base = (BaseUsercmdPb*)(pbRaw + kMessageImplOffset);
 
         InButtonStateCache* btnsCache = &cmd->buttons;
         if (pressed) {
@@ -167,26 +182,16 @@ namespace Triggerbot {
             btnsCache->value_changed |= 1ull;
         }
 
-        base->has_bits.bits |= 0x2u;
+        __try { base->has_bits.bits |= 0x2u; }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return; }
 
-        InButtonStatePb* pbBtns = base->buttons_pb;
+        InButtonStatePb* pbBtns = nullptr;
+        __try { pbBtns = base->buttons_pb; }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return; }
+
         if (pbBtns) {
-            InterlockedIncrement(&g_pbSeenCount);
             InButtonStatePb* actualPb = (InButtonStatePb*)((uintptr_t)pbBtns + kMessageImplOffset);
             WritePbButtons(actualPb, btnsCache->value, btnsCache->value_changed, btnsCache->value_scroll);
-        }
-
-        LONG n = InterlockedIncrement(&g_writeCount);
-        if (n == 1 || (n % 120) == 0) {
-            printf("[Trig] Write(%d) cmd=0x%llX v=0x%llX c=0x%llX s=0x%llX pb=0x%llX (pbSeen=%ld)\n",
-                pressed ? 1 : 0,
-                (unsigned long long)cmd,
-                (unsigned long long)btnsCache->value,
-                (unsigned long long)btnsCache->value_changed,
-                (unsigned long long)btnsCache->value_scroll,
-                (unsigned long long)pbBtns,
-                (long)g_pbSeenCount);
-            fflush(stdout);
         }
     }
 
@@ -199,16 +204,10 @@ namespace Triggerbot {
             return;
         }
 
-        ULONGLONG now = GetTickCount64();
-
-        if (g_releaseAt && now >= g_releaseAt) {
-            g_releaseAt = 0;
-            g_shouldFire.store(false);
-        }
-
         if (g_shouldFire.load()) {
             WriteAttack(true);
             g_attackCurrentlyWritten.store(true);
+            g_shouldFire.store(false);
         }
         else if (g_attackCurrentlyWritten.load()) {
             g_attackCurrentlyWritten.store(false);
@@ -216,8 +215,7 @@ namespace Triggerbot {
         }
     }
 
-    extern "C" void CreateMoveStubBridge(uintptr_t thisptr, int slot, bool active) {
-        (void)thisptr; (void)slot; (void)active;
+    extern "C" void CreateMoveStubBridge() {
         DoWrite();
     }
 
@@ -349,7 +347,7 @@ namespace Triggerbot {
             "40 53 48 83 EC 20 8B DA E8 ?? ?? ?? ?? 4C 8B C0");
 
         if (!g_getUsercmdBaseFn || !g_getUsercmdFn) {
-            printf("[Triggerbot] sigs missing\n");
+            printf("[Lavender] Triggerbot: sigs missing\n");
             fflush(stdout);
             return false;
         }
@@ -359,19 +357,9 @@ namespace Triggerbot {
             if (InstallCreateMoveHook(createMoveFn)) {
                 g_createMoveFn = createMoveFn;
                 g_createMoveHookInstalled = true;
-                printf("[Triggerbot] create_move hooked at 0x%llX\n",
-                    (unsigned long long)createMoveFn);
             }
-            else {
-                printf("[Triggerbot] create_move hook install failed\n");
-            }
-        }
-        else {
-            printf("[Triggerbot] create_move sig failed\n");
         }
 
-        printf("[Triggerbot] ready\n");
-        fflush(stdout);
         return true;
     }
 
@@ -399,20 +387,28 @@ namespace Triggerbot {
         InterlockedExchange(&g_enabled, enabled ? 1 : 0);
         if (!enabled) {
             g_shouldFire.store(false);
-            g_releaseAt = 0;
         }
     }
 
     int GetKey() { return g_key; }
     void SetKey(int key) { InterlockedExchange(&g_key, key); }
 
-    bool GetHeadOnly() { return g_headOnly != 0; }
-    void SetHeadOnly(bool headOnly) { InterlockedExchange(&g_headOnly, headOnly ? 1 : 0); }
+    bool GetTeamCheck() { return g_teamCheck != 0; }
+    void SetTeamCheck(bool v) {
+        InterlockedExchange(&g_teamCheck, v ? 1 : 0);
+        CombatShared::SetIncludeTeammates(!v);
+    }
+
+    uint32_t GetHitboxes() { return (uint32_t)g_hitboxes; }
+    void SetHitboxes(uint32_t v) {
+        if (v == 0) v = HB_HEAD;
+        InterlockedExchange(&g_hitboxes, (LONG)v);
+    }
 
     int GetDelayMs() { return g_delay_ms; }
     void SetDelayMs(int ms) {
         if (ms < 0) ms = 0;
-        if (ms > 500) ms = 500;
+        if (ms > 1000) ms = 1000;
         InterlockedExchange(&g_delay_ms, ms);
     }
 
@@ -424,10 +420,18 @@ namespace Triggerbot {
         return pid == GetCurrentProcessId();
     }
 
+    static bool HitboxOnScreen(const Vec3& bonePos, float cx, float cy, float radiusSq) {
+        Vec3 screen;
+        if (!CombatShared::WorldToScreen(bonePos, screen)) return false;
+        float dx = screen.x - cx;
+        float dy = screen.y - cy;
+        return (dx * dx + dy * dy) < radiusSq;
+    }
+
     void Tick() {
         if (g_enabled == 0) {
             g_shouldFire.store(false);
-            g_releaseAt = 0;
+            g_onTargetSince = 0;
             return;
         }
         if (Renderer::IsMenuOpen()) return;
@@ -435,25 +439,20 @@ namespace Triggerbot {
 
         ULONGLONG now = GetTickCount64();
 
-        if (g_releaseAt && now >= g_releaseAt) {
-            g_releaseAt = 0;
+        uintptr_t localPawn = CombatShared::GetLocalPawn();
+        if (!localPawn) {
             g_shouldFire.store(false);
-        }
-
-        if ((GetAsyncKeyState(g_key) & 0x8000) == 0) {
-            if (g_shouldFire.load()) {
-                g_shouldFire.store(false);
-                g_releaseAt = 0;
-            }
-            InterlockedExchange(&g_lastHasTarget, -1);
+            g_onTargetSince = 0;
             return;
         }
 
-        if (g_shouldFire.load()) return;
-        if (now < g_nextFireAllowed) return;
+        if ((GetAsyncKeyState(g_key) & 0x8000) == 0) {
+            g_shouldFire.store(false);
+            g_onTargetSince = 0;
+            return;
+        }
 
-        uintptr_t localPawn = CombatShared::GetLocalPawn();
-        if (!localPawn) return;
+        if (now < g_nextFireAllowed) return;
 
         RECT rect;
         HWND hwnd = GetForegroundWindow();
@@ -465,7 +464,7 @@ namespace Triggerbot {
         float cy = screenH * 0.5f;
 
         const float radiusSq = 15.0f * 15.0f;
-        const bool headOnly = (g_headOnly != 0);
+        const uint32_t hb = (uint32_t)g_hitboxes;
 
         auto enemies = CombatShared::GetEnemies();
         bool hasTarget = false;
@@ -473,42 +472,30 @@ namespace Triggerbot {
         for (const auto& e : enemies) {
             if (!e.visible) continue;
 
-            Vec3 headScreen;
-            if (CombatShared::WorldToScreen(e.headPos, headScreen)) {
-                float dx = headScreen.x - cx;
-                float dy = headScreen.y - cy;
-                if (dx * dx + dy * dy < radiusSq) {
-                    hasTarget = true;
-                    break;
-                }
-            }
-
-            if (headOnly) continue;
-
-            Vec3 chestScreen;
-            if (CombatShared::WorldToScreen(e.chestPos, chestScreen)) {
-                float dx = chestScreen.x - cx;
-                float dy = chestScreen.y - cy;
-                if (dx * dx + dy * dy < radiusSq) {
-                    hasTarget = true;
-                    break;
-                }
-            }
+            if ((hb & HB_HEAD) && HitboxOnScreen(e.headPos, cx, cy, radiusSq)) { hasTarget = true; break; }
+            if ((hb & HB_NECK) && HitboxOnScreen(e.neckPos, cx, cy, radiusSq)) { hasTarget = true; break; }
+            if ((hb & HB_CHEST) && HitboxOnScreen(e.chestPos, cx, cy, radiusSq)) { hasTarget = true; break; }
+            if ((hb & HB_STOMACH) && HitboxOnScreen(e.stomachPos, cx, cy, radiusSq)) { hasTarget = true; break; }
+            if ((hb & HB_PELVIS) && HitboxOnScreen(e.pelvisPos, cx, cy, radiusSq)) { hasTarget = true; break; }
+            if ((hb & HB_ARMS) && (HitboxOnScreen(e.leftArmPos, cx, cy, radiusSq) || HitboxOnScreen(e.rightArmPos, cx, cy, radiusSq))) { hasTarget = true; break; }
+            if ((hb & HB_LEGS) && (HitboxOnScreen(e.leftLegPos, cx, cy, radiusSq) || HitboxOnScreen(e.rightLegPos, cx, cy, radiusSq))) { hasTarget = true; break; }
         }
 
-        LONG prev = InterlockedExchange(&g_lastHasTarget, hasTarget ? 1 : 0);
-        if (prev != (hasTarget ? 1 : 0)) {
-            printf("[Trig] target state -> %d (enemies=%d)\n", hasTarget ? 1 : 0, (int)enemies.size());
-            fflush(stdout);
+        if (!hasTarget) {
+            g_onTargetSince = 0;
+            return;
         }
 
-        if (!hasTarget) return;
+        if (g_onTargetSince == 0) {
+            g_onTargetSince = now;
+            return;
+        }
 
         int delay = g_delay_ms;
-        ULONGLONG holdMs = (ULONGLONG)delay + 40ull;
+        if ((now - g_onTargetSince) < (ULONGLONG)delay) return;
 
         g_shouldFire.store(true);
-        g_releaseAt = now + holdMs;
-        g_nextFireAllowed = now + holdMs + 60ull;
+        g_onTargetSince = 0;
+        g_nextFireAllowed = now + 120;
     }
 }
