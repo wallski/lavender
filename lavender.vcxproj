@@ -218,6 +218,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Release|x64'">pch.h</PrecompiledHeaderFile>
     </ClCompile>
+    <ClCompile Include="src\render\Menu.cpp" />
     <ClCompile Include="src\render\Renderer.cpp" />
     <ClCompile Include="src\render\Style.cpp" />
     <ClCompile Include="src\render\Widgets.cpp" />
@@ -283,6 +284,7 @@
     <ClInclude Include="src\core\memory\OffsetManager.h" />
     <ClInclude Include="src\core\memory\PatternScan.h" />
     <ClInclude Include="src\pch.h" />
+    <ClInclude Include="src\render\Menu.h" />
     <ClInclude Include="src\render\Renderer.h" />
     <ClInclude Include="src\render\Style.h" />
     <ClInclude Include="src\render\Widgets.h" />
