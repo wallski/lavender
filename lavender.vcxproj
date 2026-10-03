@@ -100,6 +100,12 @@
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\generate_offsets.ps1"</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Generating offsets from a2x</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -121,6 +127,12 @@
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\generate_offsets.ps1"</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Generating offsets from a2x</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -140,6 +152,12 @@
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\generate_offsets.ps1"</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Generating offsets from a2x</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -161,6 +179,12 @@
     <Manifest>
       <EnableSegmentHeap>true</EnableSegmentHeap>
     </Manifest>
+    <PreBuildEvent>
+      <Command>powershell -NoProfile -ExecutionPolicy Bypass -File "$(ProjectDir)tools\generate_offsets.ps1"</Command>
+    </PreBuildEvent>
+    <PreBuildEvent>
+      <Message>Generating offsets from a2x</Message>
+    </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\config\OffsetConfig.cpp" />
@@ -243,6 +267,7 @@
   <ItemGroup>
     <ClInclude Include="src\config\OffsetConfig.h" />
     <ClInclude Include="src\core\config\ConfigManager.h" />
+    <ClInclude Include="src\config\GeneratedOffsets.h" />
     <ClInclude Include="src\core\cvar\CVar.h" />
     <ClInclude Include="src\core\features\combat\CombatShared.h" />
     <ClInclude Include="src\core\features\combat\legit\triggerbot\Triggerbot.h" />

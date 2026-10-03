@@ -185,5 +185,8 @@
     <ClInclude Include="src\core\features\visuals\esp\Esp.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\config\GeneratedOffsets.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

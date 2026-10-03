@@ -78,7 +78,32 @@ namespace Renderer {
 
     static LRESULT CALLBACK hkWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         if (g_menuOpen) {
-            if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam)) {
+            ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam);
+
+            switch (msg) {
+            case WM_MOUSEMOVE:
+            case WM_LBUTTONDOWN:
+            case WM_LBUTTONUP:
+            case WM_LBUTTONDBLCLK:
+            case WM_RBUTTONDOWN:
+            case WM_RBUTTONUP:
+            case WM_RBUTTONDBLCLK:
+            case WM_MBUTTONDOWN:
+            case WM_MBUTTONUP:
+            case WM_MBUTTONDBLCLK:
+            case WM_MOUSEWHEEL:
+            case WM_MOUSEHWHEEL:
+            case WM_XBUTTONDOWN:
+            case WM_XBUTTONUP:
+            case WM_XBUTTONDBLCLK:
+            case WM_INPUT:
+            case WM_NCMOUSEMOVE:
+            case WM_NCLBUTTONDOWN:
+            case WM_NCLBUTTONUP:
+            case WM_NCRBUTTONDOWN:
+            case WM_NCRBUTTONUP:
+            case WM_NCMBUTTONDOWN:
+            case WM_NCMBUTTONUP:
                 return TRUE;
             }
         }
