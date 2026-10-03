@@ -10,6 +10,19 @@ namespace CombatShared {
     static uintptr_t g_traceFilterInitFn = 0;
     static volatile LONG g_includeTeammates = 0;
 
+    static std::vector<Enemy> g_enemyCache;
+    static volatile LONG g_frameId = 0;
+    static volatile LONG g_cacheFrame = -1;
+
+    static constexpr uintptr_t kPtrMin = 0x0000000000010000;
+    static constexpr uintptr_t kPtrMax = 0x00007FFFFFFFFFFF;
+    static constexpr int kMaxEntityIndex = 2048;
+    static constexpr int kMaxPlayers = 64;
+
+    static inline bool IsUserPtr(uintptr_t p) {
+        return p >= kPtrMin && p <= kPtrMax;
+    }
+
     static uintptr_t ReadPtr(uintptr_t addr) {
         __try { return *(uintptr_t*)addr; }
         __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
@@ -58,44 +71,49 @@ namespace CombatShared {
 
     uintptr_t GetLocalPawn() {
         if (!OffsetConfig::globals.dwLocalPlayerPawn) return 0;
-        return ReadPtr(OffsetConfig::globals.dwLocalPlayerPawn);
+        uintptr_t p = ReadPtr(OffsetConfig::globals.dwLocalPlayerPawn);
+        return IsUserPtr(p) ? p : 0;
     }
 
     uintptr_t GetLocalController() {
         if (!OffsetConfig::globals.dwLocalPlayerController) return 0;
-        return ReadPtr(OffsetConfig::globals.dwLocalPlayerController);
+        uintptr_t p = ReadPtr(OffsetConfig::globals.dwLocalPlayerController);
+        return IsUserPtr(p) ? p : 0;
     }
 
     uintptr_t GetEntityByHandle(uint32_t handle) {
         if (!handle || handle == 0xffffffff) return 0;
         uintptr_t entityList = ReadPtr(OffsetConfig::globals.dwEntityList);
-        if (!entityList) return 0;
+        if (!IsUserPtr(entityList)) return 0;
         uintptr_t listEntry = ReadPtr(entityList + ((handle & 0x7fff) >> 9) * 8 + 0x10);
-        if (!listEntry || listEntry == 0xffffffffffffffffULL) return 0;
+        if (!IsUserPtr(listEntry)) return 0;
         uintptr_t entity = ReadPtr(listEntry + (handle & 0x1ff) * 112);
-        if (!entity || entity == 0xffffffffffffffffULL || entity < 0x10000) return 0;
+        if (!IsUserPtr(entity)) return 0;
         return entity;
     }
 
     uintptr_t GetEntityByIndex(int index) {
         uintptr_t entityList = ReadPtr(OffsetConfig::globals.dwEntityList);
-        if (!entityList) return 0;
+        if (!IsUserPtr(entityList)) return 0;
         uintptr_t listEntry = ReadPtr(entityList + ((uintptr_t)(index >> 9) * 8) + 0x10);
-        if (!listEntry) return 0;
+        if (!IsUserPtr(listEntry)) return 0;
         uintptr_t entity = ReadPtr(listEntry + (uintptr_t)(index & 0x1ff) * 112);
-        if (!entity || entity < 0x10000) return 0;
+        if (!IsUserPtr(entity)) return 0;
         return entity;
     }
 
     const char* GetSchemaName(uintptr_t entity) {
+        if (!IsUserPtr(entity)) return nullptr;
         __try {
             uintptr_t identity = *(uintptr_t*)(entity + 0x10);
-            if (!identity) return nullptr;
+            if (!IsUserPtr(identity)) return nullptr;
             uintptr_t entityClass = *(uintptr_t*)(identity + 0x8);
-            if (!entityClass) return nullptr;
+            if (!IsUserPtr(entityClass)) return nullptr;
             uintptr_t classInfo = *(uintptr_t*)(entityClass + 0x58);
-            if (!classInfo) return nullptr;
-            return *(const char**)(classInfo + 0x8);
+            if (!IsUserPtr(classInfo)) return nullptr;
+            const char* namePtr = *(const char**)(classInfo + 0x8);
+            if (!IsUserPtr((uintptr_t)namePtr)) return nullptr;
+            return namePtr;
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {
             return nullptr;
@@ -103,9 +121,9 @@ namespace CombatShared {
     }
 
     bool GetEyePosition(uintptr_t pawn, Vec3& out) {
-        if (!pawn) return false;
+        if (!IsUserPtr(pawn)) return false;
         uintptr_t sceneNode = ReadPtr(pawn + OffsetConfig::fields.m_pGameSceneNode);
-        if (!sceneNode) return false;
+        if (!IsUserPtr(sceneNode)) return false;
         Vec3 origin = ReadVec3(sceneNode + OffsetConfig::fields.m_vecAbsOrigin);
         Vec3 viewOffset = ReadVec3(pawn + OffsetConfig::fields.m_vecViewOffset);
         out = origin + viewOffset;
@@ -115,13 +133,13 @@ namespace CombatShared {
     bool GetBoneCache(uintptr_t entity, uintptr_t& cachePtr, int& count) {
         cachePtr = 0;
         count = 0;
-        if (!entity) return false;
+        if (!IsUserPtr(entity)) return false;
         uintptr_t sceneNode = ReadPtr(entity + OffsetConfig::fields.m_pGameSceneNode);
-        if (!sceneNode) return false;
+        if (!IsUserPtr(sceneNode)) return false;
         uintptr_t modelState = sceneNode + OffsetConfig::fields.m_modelState;
         cachePtr = ReadPtr(modelState + 0x80);
         count = ReadInt(modelState + 0x8c);
-        if (!cachePtr || count <= 0) return false;
+        if (!IsUserPtr(cachePtr) || count <= 0) return false;
         if (count > 128) count = 128;
         return true;
     }
@@ -200,39 +218,219 @@ namespace CombatShared {
         return true;
     }
 
-    std::vector<Enemy> GetEnemies() {
+    static bool ReadTeamRaw(uintptr_t entity, int* out) {
+        if (!IsUserPtr(entity)) return false;
+        __try {
+            *out = *reinterpret_cast<int*>(entity + OffsetConfig::fields.m_iTeamNum);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    static bool ReadHealthRaw(uintptr_t entity, int* out) {
+        if (!IsUserPtr(entity)) return false;
+        __try {
+            *out = *reinterpret_cast<int*>(entity + OffsetConfig::fields.m_iHealth);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    static bool ReadOriginRaw(uintptr_t pawn, float out[3]) {
+        if (!IsUserPtr(pawn)) return false;
+        __try {
+            uintptr_t sceneNode = *reinterpret_cast<uintptr_t*>(
+                pawn + OffsetConfig::fields.m_pGameSceneNode);
+            if (!IsUserPtr(sceneNode)) return false;
+            out[0] = *reinterpret_cast<float*>(sceneNode + OffsetConfig::fields.m_vecAbsOrigin + 0);
+            out[1] = *reinterpret_cast<float*>(sceneNode + OffsetConfig::fields.m_vecAbsOrigin + 4);
+            out[2] = *reinterpret_cast<float*>(sceneNode + OffsetConfig::fields.m_vecAbsOrigin + 8);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    static bool ReadPawnAliveRaw(uintptr_t controller, bool* out) {
+        if (!IsUserPtr(controller)) return false;
+        __try {
+            *out = *reinterpret_cast<bool*>(controller + OffsetConfig::fields.m_bPawnIsAlive);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    static bool ReadPawnHandleRaw(uintptr_t controller, uint32_t* out) {
+        if (!IsUserPtr(controller)) return false;
+        __try {
+            *out = *reinterpret_cast<uint32_t*>(controller + OffsetConfig::fields.m_hPawn);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    static bool ReadControllerNameRaw(uintptr_t controller, char* out, size_t outSize) {
+        out[0] = '\0';
+        if (!IsUserPtr(controller)) return false;
+        __try {
+            uintptr_t strPtr = *reinterpret_cast<uintptr_t*>(
+                controller + OffsetConfig::fields.m_sSanitizedPlayerName);
+            if (!IsUserPtr(strPtr)) return false;
+            const char* src = reinterpret_cast<const char*>(strPtr);
+            size_t i = 0;
+            while (i < outSize - 1 && src[i] != '\0') {
+                out[i] = src[i];
+                i++;
+            }
+            out[i] = '\0';
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    static bool ReadActiveWeaponHandleRaw(uintptr_t pawn, uint32_t* out) {
+        if (!IsUserPtr(pawn)) return false;
+        __try {
+            uintptr_t services = *reinterpret_cast<uintptr_t*>(
+                pawn + OffsetConfig::fields.m_pWeaponServices);
+            if (!IsUserPtr(services)) return false;
+            *out = *reinterpret_cast<uint32_t*>(services + OffsetConfig::fields.m_hActiveWeapon);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    static bool ReadWeaponDataRaw(uintptr_t weapon, char* nameOut, size_t nameSize,
+        int* ammo, int* maxAmmo) {
+        nameOut[0] = '\0';
+        *ammo = 0;
+        *maxAmmo = 0;
+        if (!IsUserPtr(weapon)) return false;
+        __try {
+            *ammo = *reinterpret_cast<int*>(weapon + OffsetConfig::fields.m_iClip1);
+
+            uintptr_t vdata = *reinterpret_cast<uintptr_t*>(
+                weapon + OffsetConfig::fields.m_nSubclassID + 0x8);
+            if (!IsUserPtr(vdata)) return false;
+
+            *maxAmmo = *reinterpret_cast<int*>(vdata + OffsetConfig::fields.m_iMaxClip1);
+
+            const char* sz = *reinterpret_cast<const char**>(vdata + OffsetConfig::fields.m_szName);
+            if (!IsUserPtr((uintptr_t)sz)) return false;
+
+            size_t i = 0;
+            while (i < nameSize - 1 && sz[i] != '\0') {
+                nameOut[i] = sz[i];
+                i++;
+            }
+            nameOut[i] = '\0';
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    struct ControllerRecord {
+        uintptr_t entity;
+        uintptr_t pawn;
+    };
+
+    static std::vector<Enemy> BuildEnemies() {
         std::vector<Enemy> out;
 
         uintptr_t localPawn = GetLocalPawn();
         if (!localPawn) return out;
 
-        int localTeam = ReadInt(localPawn + OffsetConfig::fields.m_iTeamNum);
+        int localTeam = 0;
+        ReadTeamRaw(localPawn, &localTeam);
+
         const bool includeTeammates = (g_includeTeammates != 0);
 
-        for (int i = 0; i < 2048; i++) {
+        const bool readName = (OffsetConfig::fields.m_sSanitizedPlayerName != 0 &&
+            OffsetConfig::fields.m_hPawn != 0);
+        const bool readWeapon = (OffsetConfig::fields.m_pWeaponServices != 0 &&
+            OffsetConfig::fields.m_hActiveWeapon != 0 &&
+            OffsetConfig::fields.m_iClip1 != 0 &&
+            OffsetConfig::fields.m_iMaxClip1 != 0 &&
+            OffsetConfig::fields.m_szName != 0 &&
+            OffsetConfig::fields.m_nSubclassID != 0);
+
+        ControllerRecord controllers[kMaxPlayers];
+        int ctrlCount = 0;
+
+        for (int i = 0; i < kMaxEntityIndex; i++) {
             uintptr_t entity = GetEntityByIndex(i);
             if (!entity) continue;
 
-            const char* name = GetSchemaName(entity);
-            if (!name) continue;
-            if (strcmp(name, "C_CSPlayerPawn") != 0) continue;
+            const char* schema = GetSchemaName(entity);
+            if (!schema) continue;
+            if (strcmp(schema, "CCSPlayerController") != 0) continue;
+            if (ctrlCount >= kMaxPlayers) break;
+
+            uint32_t pawnHandle = 0;
+            if (!ReadPawnHandleRaw(entity, &pawnHandle)) continue;
+            if (!pawnHandle || pawnHandle == 0xffffffff) continue;
+
+            uintptr_t pawn = GetEntityByHandle(pawnHandle);
+            if (!IsUserPtr(pawn)) continue;
+
+            controllers[ctrlCount].entity = entity;
+            controllers[ctrlCount].pawn = pawn;
+            ctrlCount++;
+        }
+
+        for (int i = 0; i < kMaxEntityIndex; i++) {
+            uintptr_t entity = GetEntityByIndex(i);
+            if (!entity) continue;
+
+            const char* schema = GetSchemaName(entity);
+            if (!schema) continue;
+            if (strcmp(schema, "C_CSPlayerPawn") != 0) continue;
             if (entity == localPawn) continue;
 
-            int health = ReadInt(entity + OffsetConfig::fields.m_iHealth);
+            int health = 0;
+            ReadHealthRaw(entity, &health);
             if (health <= 0) continue;
 
-            int team = ReadInt(entity + OffsetConfig::fields.m_iTeamNum);
+            int team = 0;
+            ReadTeamRaw(entity, &team);
             if (!includeTeammates && team == localTeam) continue;
 
             Enemy e{};
             e.pawn = entity;
-            e.controller = 0;
             e.health = health;
             e.team = team;
 
-            uintptr_t sceneNode = ReadPtr(entity + OffsetConfig::fields.m_pGameSceneNode);
-            if (sceneNode) {
-                e.origin = ReadVec3(sceneNode + OffsetConfig::fields.m_vecAbsOrigin);
+            for (int j = 0; j < ctrlCount; j++) {
+                if (controllers[j].pawn == entity) {
+                    e.controller = controllers[j].entity;
+                    if (readName) {
+                        char nameBuf[128];
+                        if (ReadControllerNameRaw(controllers[j].entity, nameBuf, sizeof(nameBuf))) {
+                            e.name.assign(nameBuf);
+                        }
+                    }
+                    break;
+                }
+            }
+
+            float origin[3] = { 0.0f, 0.0f, 0.0f };
+            if (ReadOriginRaw(entity, origin)) {
+                e.origin = Vec3(origin[0], origin[1], origin[2]);
             }
 
             GetBonePosition(entity, 7, e.headPos);
@@ -245,14 +443,45 @@ namespace CombatShared {
             GetBonePosition(entity, 17, e.leftLegPos);
             GetBonePosition(entity, 20, e.rightLegPos);
 
+            if (readWeapon) {
+                uint32_t weaponHandle = 0;
+                if (ReadActiveWeaponHandleRaw(entity, &weaponHandle) && weaponHandle) {
+                    uintptr_t weapon = GetEntityByHandle(weaponHandle);
+                    if (weapon) {
+                        char wName[64];
+                        int ammo = 0;
+                        int maxAmmo = 0;
+                        if (ReadWeaponDataRaw(weapon, wName, sizeof(wName), &ammo, &maxAmmo)) {
+                            e.weaponName.assign(wName);
+                            e.ammo = ammo;
+                            e.maxAmmo = maxAmmo;
+                            e.hasWeapon = true;
+                        }
+                    }
+                }
+            }
+
             Vec3 eye;
             if (GetEyePosition(localPawn, eye)) {
                 e.visible = IsVisible(eye, e.headPos, localPawn, entity);
             }
 
-            out.push_back(e);
+            out.push_back(std::move(e));
         }
 
         return out;
+    }
+
+    void BeginFrame() {
+        InterlockedIncrement(&g_frameId);
+    }
+
+    const std::vector<Enemy>& GetEnemiesCached() {
+        const LONG cur = g_frameId;
+        if (cur != g_cacheFrame) {
+            g_enemyCache = BuildEnemies();
+            InterlockedExchange(&g_cacheFrame, cur);
+        }
+        return g_enemyCache;
     }
 }

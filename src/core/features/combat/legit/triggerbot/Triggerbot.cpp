@@ -499,7 +499,7 @@ namespace Triggerbot {
         float cy = screenH * 0.5f;
 
         const uint32_t hb = (uint32_t)g_hitboxes;
-        auto enemies = CombatShared::GetEnemies();
+        const auto& enemies = CombatShared::GetEnemiesCached();
 
         bool hasTarget = false;
         for (const auto& e : enemies) {

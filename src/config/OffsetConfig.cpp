@@ -140,10 +140,36 @@ namespace OffsetConfig {
             if (ExtractHppConstant(hpp, "m_pCollision", v)) fields.m_pCollision = (uint32_t)v;
             if (ExtractHppConstant(hpp, "m_vecMins", v)) fields.m_vecMins = (uint32_t)v;
             if (ExtractHppConstant(hpp, "m_vecMaxs", v)) fields.m_vecMaxs = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_sSanitizedPlayerName", v)) fields.m_sSanitizedPlayerName = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_iClip1", v)) fields.m_iClip1 = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_iMaxClip1", v)) fields.m_iMaxClip1 = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_szName", v)) fields.m_szName = (uint32_t)v;
+            if (ExtractHppConstant(hpp, "m_nSubclassID", v)) fields.m_nSubclassID = (uint32_t)v;
         }
         else {
             printf("[OffsetConfig] WARN: cannot read %s\n", hppPath.c_str()); fflush(stdout);
         }
+
+        printf("[OffsetConfig] Fields resolved:\n");
+        printf("  m_iHealth               = 0x%X\n", fields.m_iHealth);
+        printf("  m_iTeamNum              = 0x%X\n", fields.m_iTeamNum);
+        printf("  m_pGameSceneNode        = 0x%X\n", fields.m_pGameSceneNode);
+        printf("  m_vecAbsOrigin          = 0x%X\n", fields.m_vecAbsOrigin);
+        printf("  m_vecViewOffset         = 0x%X\n", fields.m_vecViewOffset);
+        printf("  m_bPawnIsAlive          = 0x%X\n", fields.m_bPawnIsAlive);
+        printf("  m_hPawn                 = 0x%X\n", fields.m_hPawn);
+        printf("  m_pWeaponServices       = 0x%X\n", fields.m_pWeaponServices);
+        printf("  m_hActiveWeapon         = 0x%X\n", fields.m_hActiveWeapon);
+        printf("  m_modelState            = 0x%X\n", fields.m_modelState);
+        printf("  m_pCollision            = 0x%X\n", fields.m_pCollision);
+        printf("  m_vecMins               = 0x%X\n", fields.m_vecMins);
+        printf("  m_vecMaxs               = 0x%X\n", fields.m_vecMaxs);
+        printf("  m_sSanitizedPlayerName  = 0x%X\n", fields.m_sSanitizedPlayerName);
+        printf("  m_iClip1                = 0x%X\n", fields.m_iClip1);
+        printf("  m_iMaxClip1             = 0x%X\n", fields.m_iMaxClip1);
+        printf("  m_szName                = 0x%X\n", fields.m_szName);
+        printf("  m_nSubclassID           = 0x%X\n", fields.m_nSubclassID);
+        fflush(stdout);
 
         loaded = true;
         return true;

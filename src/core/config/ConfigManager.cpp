@@ -111,6 +111,45 @@ namespace ConfigManager {
         f << "esp.box_fill_b=" << fc[2] << "\n";
         f << "esp.box_fill_a=" << fc[3] << "\n";
 
+        f << "esp.health_enabled=" << (Esp::IsHealthEnabled() ? 1 : 0) << "\n";
+        f << "esp.health_position=" << Esp::GetHealthPosition() << "\n";
+        f << "esp.health_style=" << Esp::GetHealthStyle() << "\n";
+        const float* hc = Esp::GetHealthColor();
+        f << "esp.health_color_r=" << hc[0] << "\n";
+        f << "esp.health_color_g=" << hc[1] << "\n";
+        f << "esp.health_color_b=" << hc[2] << "\n";
+        f << "esp.health_color_a=" << hc[3] << "\n";
+        const float* hl = Esp::GetHealthLowColor();
+        f << "esp.health_low_r=" << hl[0] << "\n";
+        f << "esp.health_low_g=" << hl[1] << "\n";
+        f << "esp.health_low_b=" << hl[2] << "\n";
+        f << "esp.health_low_a=" << hl[3] << "\n";
+        const float* hh = Esp::GetHealthHighColor();
+        f << "esp.health_high_r=" << hh[0] << "\n";
+        f << "esp.health_high_g=" << hh[1] << "\n";
+        f << "esp.health_high_b=" << hh[2] << "\n";
+        f << "esp.health_high_a=" << hh[3] << "\n";
+        f << "esp.health_show_value=" << (Esp::IsHealthShowValue() ? 1 : 0) << "\n";
+        f << "esp.health_thickness=" << Esp::GetHealthThickness() << "\n";
+
+        f << "esp.ammo_enabled=" << (Esp::IsAmmoEnabled() ? 1 : 0) << "\n";
+        f << "esp.ammo_position=" << Esp::GetAmmoPosition() << "\n";
+        const float* ac = Esp::GetAmmoColor();
+        f << "esp.ammo_color_r=" << ac[0] << "\n";
+        f << "esp.ammo_color_g=" << ac[1] << "\n";
+        f << "esp.ammo_color_b=" << ac[2] << "\n";
+        f << "esp.ammo_color_a=" << ac[3] << "\n";
+        f << "esp.ammo_show_value=" << (Esp::IsAmmoShowValue() ? 1 : 0) << "\n";
+        f << "esp.ammo_thickness=" << Esp::GetAmmoThickness() << "\n";
+
+        f << "esp.name_enabled=" << (Esp::IsNameEnabled() ? 1 : 0) << "\n";
+        f << "esp.name_position=" << Esp::GetNamePosition() << "\n";
+        const float* nc = Esp::GetNameColor();
+        f << "esp.name_color_r=" << nc[0] << "\n";
+        f << "esp.name_color_g=" << nc[1] << "\n";
+        f << "esp.name_color_b=" << nc[2] << "\n";
+        f << "esp.name_color_a=" << nc[3] << "\n";
+
         f << "removals.flash=" << (Removals::IsFlashEnabled() ? 1 : 0) << "\n";
 
         f << "world.skybox_enabled=" << (Skybox::IsEnabled() ? 1 : 0) << "\n";
@@ -150,6 +189,25 @@ namespace ConfigManager {
         float espBoxCornerLength = 8.0f;
         float espBoxVisible[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
         float espBoxFillColor[4] = { 0.659f, 0.333f, 0.969f, 0.25f };
+
+        bool espHealthEnabled = false;
+        int espHealthPosition = 0;
+        int espHealthStyle = 0;
+        float espHealthColor[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+        float espHealthLow[4] = { 1.00f, 0.25f, 0.25f, 1.00f };
+        float espHealthHigh[4] = { 0.30f, 1.00f, 0.30f, 1.00f };
+        bool espHealthShowValue = true;
+        float espHealthThickness = 3.0f;
+
+        bool espAmmoEnabled = false;
+        int espAmmoPosition = 2;
+        float espAmmoColor[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
+        bool espAmmoShowValue = true;
+        float espAmmoThickness = 3.0f;
+
+        bool espNameEnabled = false;
+        int espNamePosition = 0;
+        float espNameColor[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
 
         bool removalsFlash = false;
         bool skyboxEnabled = false;
@@ -201,6 +259,40 @@ namespace ConfigManager {
             else if (key == "esp.box_fill_b") espBoxFillColor[2] = ParseFloat(val, espBoxFillColor[2]);
             else if (key == "esp.box_fill_a") espBoxFillColor[3] = ParseFloat(val, espBoxFillColor[3]);
 
+            else if (key == "esp.health_enabled") espHealthEnabled = ParseBool(val);
+            else if (key == "esp.health_position") espHealthPosition = ParseInt(val, espHealthPosition);
+            else if (key == "esp.health_style") espHealthStyle = ParseInt(val, espHealthStyle);
+            else if (key == "esp.health_color_r") espHealthColor[0] = ParseFloat(val, espHealthColor[0]);
+            else if (key == "esp.health_color_g") espHealthColor[1] = ParseFloat(val, espHealthColor[1]);
+            else if (key == "esp.health_color_b") espHealthColor[2] = ParseFloat(val, espHealthColor[2]);
+            else if (key == "esp.health_color_a") espHealthColor[3] = ParseFloat(val, espHealthColor[3]);
+            else if (key == "esp.health_low_r") espHealthLow[0] = ParseFloat(val, espHealthLow[0]);
+            else if (key == "esp.health_low_g") espHealthLow[1] = ParseFloat(val, espHealthLow[1]);
+            else if (key == "esp.health_low_b") espHealthLow[2] = ParseFloat(val, espHealthLow[2]);
+            else if (key == "esp.health_low_a") espHealthLow[3] = ParseFloat(val, espHealthLow[3]);
+            else if (key == "esp.health_high_r") espHealthHigh[0] = ParseFloat(val, espHealthHigh[0]);
+            else if (key == "esp.health_high_g") espHealthHigh[1] = ParseFloat(val, espHealthHigh[1]);
+            else if (key == "esp.health_high_b") espHealthHigh[2] = ParseFloat(val, espHealthHigh[2]);
+            else if (key == "esp.health_high_a") espHealthHigh[3] = ParseFloat(val, espHealthHigh[3]);
+            else if (key == "esp.health_show_value") espHealthShowValue = ParseBool(val);
+            else if (key == "esp.health_thickness") espHealthThickness = ParseFloat(val, espHealthThickness);
+
+            else if (key == "esp.ammo_enabled") espAmmoEnabled = ParseBool(val);
+            else if (key == "esp.ammo_position") espAmmoPosition = ParseInt(val, espAmmoPosition);
+            else if (key == "esp.ammo_color_r") espAmmoColor[0] = ParseFloat(val, espAmmoColor[0]);
+            else if (key == "esp.ammo_color_g") espAmmoColor[1] = ParseFloat(val, espAmmoColor[1]);
+            else if (key == "esp.ammo_color_b") espAmmoColor[2] = ParseFloat(val, espAmmoColor[2]);
+            else if (key == "esp.ammo_color_a") espAmmoColor[3] = ParseFloat(val, espAmmoColor[3]);
+            else if (key == "esp.ammo_show_value") espAmmoShowValue = ParseBool(val);
+            else if (key == "esp.ammo_thickness") espAmmoThickness = ParseFloat(val, espAmmoThickness);
+
+            else if (key == "esp.name_enabled") espNameEnabled = ParseBool(val);
+            else if (key == "esp.name_position") espNamePosition = ParseInt(val, espNamePosition);
+            else if (key == "esp.name_color_r") espNameColor[0] = ParseFloat(val, espNameColor[0]);
+            else if (key == "esp.name_color_g") espNameColor[1] = ParseFloat(val, espNameColor[1]);
+            else if (key == "esp.name_color_b") espNameColor[2] = ParseFloat(val, espNameColor[2]);
+            else if (key == "esp.name_color_a") espNameColor[3] = ParseFloat(val, espNameColor[3]);
+
             else if (key == "removals.flash") removalsFlash = ParseBool(val);
             else if (key == "world.skybox_enabled") skyboxEnabled = ParseBool(val);
             else if (key == "world.skybox_index") skyboxIndex = ParseInt(val, skyboxIndex);
@@ -230,6 +322,25 @@ namespace ConfigManager {
         Esp::SetBoxCornerLength(espBoxCornerLength);
         Esp::SetBoxVisibleColor(espBoxVisible);
         Esp::SetBoxFillColor(espBoxFillColor);
+
+        Esp::SetHealthEnabled(espHealthEnabled);
+        Esp::SetHealthPosition(espHealthPosition);
+        Esp::SetHealthStyle(espHealthStyle);
+        Esp::SetHealthColor(espHealthColor);
+        Esp::SetHealthLowColor(espHealthLow);
+        Esp::SetHealthHighColor(espHealthHigh);
+        Esp::SetHealthShowValue(espHealthShowValue);
+        Esp::SetHealthThickness(espHealthThickness);
+
+        Esp::SetAmmoEnabled(espAmmoEnabled);
+        Esp::SetAmmoPosition(espAmmoPosition);
+        Esp::SetAmmoColor(espAmmoColor);
+        Esp::SetAmmoShowValue(espAmmoShowValue);
+        Esp::SetAmmoThickness(espAmmoThickness);
+
+        Esp::SetNameEnabled(espNameEnabled);
+        Esp::SetNamePosition(espNamePosition);
+        Esp::SetNameColor(espNameColor);
 
         Removals::SetFlashEnabled(removalsFlash);
         Skybox::SetEnabled(skyboxEnabled);

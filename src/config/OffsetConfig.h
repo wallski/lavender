@@ -37,6 +37,11 @@ namespace OffsetConfig {
         uint32_t m_pCollision = 0;
         uint32_t m_vecMins = 0;
         uint32_t m_vecMaxs = 0;
+        uint32_t m_sSanitizedPlayerName = 0;
+        uint32_t m_iClip1 = 0;
+        uint32_t m_iMaxClip1 = 0;
+        uint32_t m_szName = 0;
+        uint32_t m_nSubclassID = 0;
     };
 
     extern Globals globals;

@@ -224,6 +224,10 @@ namespace Renderer {
         "Head", "Neck", "Chest", "Stomach", "Pelvis", "Arms", "Legs"
     };
 
+    static const char* kBarPositionNames[] = { "Left", "Top", "Bottom" };
+    static const char* kNamePositionNames[] = { "Above", "Below" };
+    static const char* kHealthStyleNames[] = { "Static", "Gradient" };
+
     static void DrawHitboxDropdown(uint32_t* hitboxes) {
         constexpr float rowH = 30.0f;
         ImGui::PushID("##hitbox_dropdown");
@@ -444,12 +448,127 @@ namespace Renderer {
         ImGui::EndChild();
     }
 
+    static void DrawEspHealthCard() {
+        bool enabled = Esp::IsHealthEnabled();
+        int position = Esp::GetHealthPosition();
+        int style = Esp::GetHealthStyle();
+        bool showValue = Esp::IsHealthShowValue();
+        float thickness = Esp::GetHealthThickness();
+
+        float color[4];
+        float lowColor[4];
+        float highColor[4];
+        memcpy(color, Esp::GetHealthColor(), sizeof(color));
+        memcpy(lowColor, Esp::GetHealthLowColor(), sizeof(lowColor));
+        memcpy(highColor, Esp::GetHealthHighColor(), sizeof(highColor));
+
+        int rows = 4;
+        rows += (style == 0) ? 1 : 2;
+        rows += 1;
+
+        Widgets::BeginCard("HEALTH", rows);
+
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            Esp::SetHealthEnabled(enabled);
+        }
+        if (ImGui::Combo("Position", &position, kBarPositionNames, IM_ARRAYSIZE(kBarPositionNames))) {
+            Esp::SetHealthPosition(position);
+        }
+        if (ImGui::Combo("Style", &style, kHealthStyleNames, IM_ARRAYSIZE(kHealthStyleNames))) {
+            Esp::SetHealthStyle(style);
+        }
+        if (style == 0) {
+            if (Widgets::ColorPicker("Color", color)) {
+                Esp::SetHealthColor(color);
+            }
+        }
+        else {
+            if (Widgets::ColorPicker("Low color", lowColor)) {
+                Esp::SetHealthLowColor(lowColor);
+            }
+            if (Widgets::ColorPicker("High color", highColor)) {
+                Esp::SetHealthHighColor(highColor);
+            }
+        }
+        if (Widgets::Toggle("Show value", &showValue)) {
+            Esp::SetHealthShowValue(showValue);
+        }
+        if (Widgets::SliderFloat("Thickness", &thickness, 1.0f, 6.0f, "%.0f")) {
+            Esp::SetHealthThickness(thickness);
+        }
+
+        Widgets::EndCard();
+    }
+
+    static void DrawEspAmmoCard() {
+        bool enabled = Esp::IsAmmoEnabled();
+        int position = Esp::GetAmmoPosition();
+        bool showValue = Esp::IsAmmoShowValue();
+        float thickness = Esp::GetAmmoThickness();
+
+        float color[4];
+        memcpy(color, Esp::GetAmmoColor(), sizeof(color));
+
+        Widgets::BeginCard("AMMO", 5);
+
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            Esp::SetAmmoEnabled(enabled);
+        }
+        if (ImGui::Combo("Position", &position, kBarPositionNames, IM_ARRAYSIZE(kBarPositionNames))) {
+            Esp::SetAmmoPosition(position);
+        }
+        if (Widgets::ColorPicker("Color", color)) {
+            Esp::SetAmmoColor(color);
+        }
+        if (Widgets::Toggle("Show value", &showValue)) {
+            Esp::SetAmmoShowValue(showValue);
+        }
+        if (Widgets::SliderFloat("Thickness", &thickness, 1.0f, 6.0f, "%.0f")) {
+            Esp::SetAmmoThickness(thickness);
+        }
+
+        Widgets::EndCard();
+    }
+
+    static void DrawEspNameCard() {
+        bool enabled = Esp::IsNameEnabled();
+        int position = Esp::GetNamePosition();
+
+        float color[4];
+        memcpy(color, Esp::GetNameColor(), sizeof(color));
+
+        Widgets::BeginCard("NAME", 3);
+
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            Esp::SetNameEnabled(enabled);
+        }
+        if (ImGui::Combo("Position", &position, kNamePositionNames, IM_ARRAYSIZE(kNamePositionNames))) {
+            Esp::SetNamePosition(position);
+        }
+        if (Widgets::ColorPicker("Color", color)) {
+            Esp::SetNameColor(color);
+        }
+
+        Widgets::EndCard();
+    }
+
     static void DrawInfoSubTab() {
-        ImGui::Dummy(ImVec2(0, 12));
-        ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Style::RowInnerPad);
-        ImGui::PushStyleColor(ImGuiCol_Text, Style::TextDim);
-        ImGui::TextUnformatted("health, ammo and name will live here");
-        ImGui::PopStyleColor();
+        const float totalW = ImGui::GetContentRegionAvail().x;
+        const float gap = 10.0f;
+        const float colW = (totalW - gap) * 0.5f;
+
+        ImGui::BeginChild("##info_col_left", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        DrawEspHealthCard();
+        ImGui::EndChild();
+
+        ImGui::SameLine(0, gap);
+
+        ImGui::BeginChild("##info_col_right", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        DrawEspAmmoCard();
+        DrawEspNameCard();
+        ImGui::EndChild();
     }
 
     static void DrawVisualsTab() {
@@ -754,6 +873,7 @@ namespace Renderer {
         }
 
         UpdateMouseState();
+        CombatShared::BeginFrame();
         Removals::Update();
         Triggerbot::Tick();
 

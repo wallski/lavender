@@ -157,6 +157,7 @@ namespace Chams {
 
     void OnSortCall(void* array, uint32_t count) {
         if (g_enabled == 0) return;
+
         uintptr_t arr = (uintptr_t)array;
         if (arr < 0x10000) return;
         if (count > 65536) count = 65536;

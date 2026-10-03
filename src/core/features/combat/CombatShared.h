@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <vector>
+#include <string>
 
 struct Vec3 {
     float x, y, z;
@@ -62,11 +63,19 @@ namespace CombatShared {
         Vec3      leftLegPos;
         Vec3      rightLegPos;
         bool      visible;
+        std::string name;
+        std::string weaponName;
+        int       ammo;
+        int       maxAmmo;
+        bool      hasWeapon;
     };
 
     void SetIncludeTeammates(bool v);
 
     std::vector<Enemy> GetEnemies();
+
+    void BeginFrame();
+    const std::vector<Enemy>& GetEnemiesCached();
 
     bool  IsVisible(const Vec3& start, const Vec3& end, uintptr_t skipEntity, uintptr_t targetEntity);
 }

@@ -32,4 +32,50 @@ namespace Esp {
     void SetBoxVisibleColor(const float color[4]);
     void SetBoxFillColor(const float color[4]);
 
+    bool IsHealthEnabled();
+    void SetHealthEnabled(bool enabled);
+
+    int  GetHealthPosition();
+    void SetHealthPosition(int position);
+
+    int  GetHealthStyle();
+    void SetHealthStyle(int style);
+
+    float* GetHealthColor();
+    float* GetHealthLowColor();
+    float* GetHealthHighColor();
+    void SetHealthColor(const float color[4]);
+    void SetHealthLowColor(const float color[4]);
+    void SetHealthHighColor(const float color[4]);
+
+    bool IsHealthShowValue();
+    void SetHealthShowValue(bool enabled);
+
+    float GetHealthThickness();
+    void SetHealthThickness(float thickness);
+
+    bool IsAmmoEnabled();
+    void SetAmmoEnabled(bool enabled);
+
+    int  GetAmmoPosition();
+    void SetAmmoPosition(int position);
+
+    float* GetAmmoColor();
+    void SetAmmoColor(const float color[4]);
+
+    bool IsAmmoShowValue();
+    void SetAmmoShowValue(bool enabled);
+
+    float GetAmmoThickness();
+    void SetAmmoThickness(float thickness);
+
+    bool IsNameEnabled();
+    void SetNameEnabled(bool enabled);
+
+    int  GetNamePosition();
+    void SetNamePosition(int position);
+
+    float* GetNameColor();
+    void SetNameColor(const float color[4]);
+
 }

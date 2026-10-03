@@ -171,6 +171,9 @@ void MainThread(HMODULE hModule) {
 
     Chams::SetEntityListGlobal(OffsetConfig::globals.dwEntityList);
     Chams::SetLocalPawnGlobal(OffsetConfig::globals.dwLocalPlayerPawn);
+    Log("[Lavender] Chams globals: entityList=0x%llX localPawn=0x%llX\n",
+        (unsigned long long)OffsetConfig::globals.dwEntityList,
+        (unsigned long long)OffsetConfig::globals.dwLocalPlayerPawn);
 
     ConfigManager::Initialize();
 
@@ -196,12 +199,15 @@ void MainThread(HMODULE hModule) {
     uintptr_t fn = Memory::FindPattern("scenesystem.dll", pattern);
     if (fn) {
         g_sortFn = fn;
-        if (!InstallSortHook(fn)) {
-            Log("[Lavender] Sort hook failed\n");
+        if (InstallSortHook(fn)) {
+            Log("[Lavender] Sort hook installed at 0x%llX\n", (unsigned long long)fn);
+        }
+        else {
+            Log("[Lavender] Sort hook install FAILED\n");
         }
     }
     else {
-        Log("[Lavender] Sort pattern not found\n");
+        Log("[Lavender] Sort pattern NOT FOUND\n");
     }
 
     Log("[Lavender] Ready.\n");
