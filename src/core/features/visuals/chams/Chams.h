@@ -21,7 +21,5 @@ namespace Chams {
     float* GetColor();
     void SetColor(const float color[4]);
 
-    void ApplyLodOverride();
-
     void OnSortCall(void* array, uint32_t count);
 }

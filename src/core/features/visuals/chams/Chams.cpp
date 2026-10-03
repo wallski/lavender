@@ -1,7 +1,6 @@
 #include "pch.h"
 #include "Chams.h"
 #include "../../../../config/OffsetConfig.h"
-#include "../../../cvar/CVar.h"
 
 static volatile LONG g_enabled = 0;
 static volatile LONG g_teamCheck = 0;
@@ -108,51 +107,6 @@ namespace Chams {
         g_color[1] = color[1];
         g_color[2] = color[2];
         g_color[3] = color[3];
-    }
-
-    void ApplyLodOverride() {
-        struct Entry {
-            const char* name;
-            float value;
-        };
-
-        const Entry floatCvars[] = {
-            { "sc_instanced_mesh_lod_bias", 100.0f },
-            { "sc_instanced_mesh_lod_bias_shadow", 100.0f },
-            { "sc_instanced_mesh_size_cull_bias", 100.0f },
-            { "sc_instanced_mesh_size_cull_bias_shadow", 100.0f },
-            { "sc_screen_size_lod_scale_override", 1.0f },
-            { "sc_dithered_lod_transition_amt", 0.0f },
-            { "r_texture_lod_scale", 0.0f },
-            { "r_fallback_texture_lod_scale", 0.0f }
-        };
-
-        for (const auto& e : floatCvars) {
-            CConVar* c = CVar::Find(e.name);
-            if (c) c->Set(e.value);
-        }
-
-        const Entry intCvars[] = {
-            { "sc_force_lod_level", 0.0f },
-            { "sc_no_cull", 1.0f },
-            { "sc_disable_culling_boxes", 1.0f },
-            { "sc_skip_traversal", 0.0f },
-            { "sc_aggregate_gpu_culling", 0.0f },
-            { "sc_aggregate_gpu_occlusion_culling", 0.0f },
-            { "sc_instanced_mesh_gpu_culling", 0.0f },
-            { "sc_instanced_mesh_gpu_occlusion_culling", 0.0f },
-            { "sc_instanced_mesh_gpu_density_culling", 0.0f },
-            { "sc_instanced_mesh_gpu_vis_culling", 0.0f },
-            { "sc_mesh_gpu_occlusion_culling", 0.0f },
-            { "sc_mesh_gpu_volume_culling", 0.0f },
-            { "sc_allow_dithered_lod", 0.0f },
-            { "skeleton_instance_lod_optimization", 0.0f }
-        };
-
-        for (const auto& e : intCvars) {
-            CConVar* c = CVar::Find(e.name);
-            if (c) c->Set((int)e.value);
-        }
     }
 
     void OnSortCall(void* array, uint32_t count) {

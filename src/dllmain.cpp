@@ -185,9 +185,7 @@ void MainThread(HMODULE hModule) {
         Log("[Lavender] Skybox failed (feature disabled)\n");
     }
 
-    if (CVar::Initialize()) {
-        Chams::ApplyLodOverride();
-    }
+    CVar::Initialize();
 
     CombatShared::Initialize();
     Triggerbot::Initialize();
