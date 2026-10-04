@@ -23,4 +23,10 @@ namespace Aim {
 
     bool IsTeamCheck();
     void SetTeamCheck(bool enabled);
+
+    bool IsOnAccuracy();
+    void SetOnAccuracy(bool enabled);
+
+    float GetAccuracySpeed();
+    void SetAccuracySpeed(float speed);
 }

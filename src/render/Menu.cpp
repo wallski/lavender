@@ -98,8 +98,13 @@ namespace Menu {
         bool teamCheck = Aim::IsTeamCheck();
         float fov = Aim::GetFov();
         int smooth = Aim::GetSmooth();
+        bool onAccuracy = Aim::IsOnAccuracy();
+        float accuracySpeed = Aim::GetAccuracySpeed();
 
-        Widgets::BeginCard("AIMBOT", 5);
+        int rows = 6;
+        if (onAccuracy) rows += 1;
+
+        Widgets::BeginCard("AIMBOT", rows);
 
         if (Widgets::Toggle("Enabled", &enabled)) {
             Aim::SetEnabled(enabled);
@@ -115,6 +120,14 @@ namespace Menu {
         }
         if (Widgets::SliderInt("Smooth", &smooth, 1, 30)) {
             Aim::SetSmooth(smooth);
+        }
+        if (Widgets::Toggle("On accuracy", &onAccuracy)) {
+            Aim::SetOnAccuracy(onAccuracy);
+        }
+        if (onAccuracy) {
+            if (Widgets::SliderFloat("Max speed", &accuracySpeed, 0.5f, 30.0f, "%.1f")) {
+                Aim::SetAccuracySpeed(accuracySpeed);
+            }
         }
 
         Widgets::EndCard();
@@ -685,7 +698,7 @@ namespace Menu {
             ImGui::PushStyleColor(ImGuiCol_Text, Style::Accent);
             ImGui::TextUnformatted("LAVENDER");
             ImGui::PopStyleColor();
-            ImGui::PopFont();
+            ImGui::PopFont();   
             ImGui::Dummy(ImVec2(0, 16));
 
             const char* titles[] = { "Legit",   "Visuals",        "World",          "Misc",          "Config" };

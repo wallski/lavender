@@ -30,6 +30,7 @@ namespace GeneratedOffsets {
         constexpr uint32_t m_bPawnIsAlive = 0x934;
         constexpr uint32_t m_hPawn = 0x600;
         constexpr uint32_t m_fFlags = 0x3F4;
+        constexpr uint32_t m_vecAbsVelocity = 0x3F8;
         constexpr uint32_t m_angEyeAngles = 0x35F0;
         constexpr uint32_t m_pAimPunchServices = 0x1598;
         constexpr uint32_t m_pWeaponServices = 0x12F0;

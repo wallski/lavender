@@ -70,8 +70,6 @@ namespace CombatShared {
         bool      hasWeapon;
     };
 
-    void SetIncludeTeammates(bool v);
-
     std::vector<Enemy> GetEnemies();
 
     void BeginFrame();

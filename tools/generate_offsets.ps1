@@ -87,6 +87,7 @@ $fieldNames = @(
     "m_bPawnIsAlive",
     "m_hPawn",
     "m_fFlags",
+    "m_vecAbsVelocity",
     "m_angEyeAngles",
     "m_pAimPunchServices",
     "m_pWeaponServices",

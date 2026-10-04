@@ -8,7 +8,6 @@ namespace CombatShared {
 
     static uintptr_t g_traceRayFn = 0;
     static uintptr_t g_traceFilterInitFn = 0;
-    static volatile LONG g_includeTeammates = 0;
 
     static std::vector<Enemy> g_enemyCache;
     static volatile LONG g_frameId = 0;
@@ -64,10 +63,6 @@ namespace CombatShared {
     }
 
     void Shutdown() {}
-
-    void SetIncludeTeammates(bool v) {
-        InterlockedExchange(&g_includeTeammates, v ? 1 : 0);
-    }
 
     uintptr_t GetLocalPawn() {
         if (!OffsetConfig::globals.dwLocalPlayerPawn) return 0;
@@ -355,11 +350,6 @@ namespace CombatShared {
         uintptr_t localPawn = GetLocalPawn();
         if (!localPawn) return out;
 
-        int localTeam = 0;
-        ReadTeamRaw(localPawn, &localTeam);
-
-        const bool includeTeammates = (g_includeTeammates != 0);
-
         const bool readName = (OffsetConfig::fields.m_sSanitizedPlayerName != 0 &&
             OffsetConfig::fields.m_hPawn != 0);
         const bool readWeapon = (OffsetConfig::fields.m_pWeaponServices != 0 &&
@@ -378,7 +368,8 @@ namespace CombatShared {
 
             const char* schema = GetSchemaName(entity);
             if (!schema) continue;
-            if (strcmp(schema, "CCSPlayerController") != 0) continue;
+            if (strcmp(schema, "C_CSPlayerController") != 0 &&
+                strcmp(schema, "CCSPlayerController") != 0) continue;
             if (ctrlCount >= kMaxPlayers) break;
 
             uint32_t pawnHandle = 0;
@@ -408,7 +399,6 @@ namespace CombatShared {
 
             int team = 0;
             ReadTeamRaw(entity, &team);
-            if (!includeTeammates && team == localTeam) continue;
 
             Enemy e{};
             e.pawn = entity;

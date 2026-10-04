@@ -1,9 +1,11 @@
 #include "pch.h"
 #include "Aim.h"
 #include "../../CombatShared.h"
+#include "../triggerbot/Triggerbot.h"
 #include "../../../../../config/OffsetConfig.h"
 #include "../../../../../render/Renderer.h"
 #include <cmath>
+#include <atomic>
 
 namespace Aim {
 
@@ -13,6 +15,13 @@ namespace Aim {
     static volatile LONG g_hitboxes = 0x01;
     static float g_fov = 5.0f;
     static volatile LONG g_smooth = 3;
+    static volatile LONG g_onAccuracy = 0;
+    static float g_accuracySpeed = 5.0f;
+
+    static std::atomic<bool> g_onTargetNow{ false };
+    static ULONGLONG g_nextFire = 0;
+    static constexpr ULONGLONG kFireCooldownMs = 75;
+    static constexpr float kTightAngleDeg = 3.0f;
 
     static constexpr uint32_t HB_HEAD = 1u << 0;
     static constexpr uint32_t HB_NECK = 1u << 1;
@@ -65,18 +74,79 @@ namespace Aim {
         return false;
     }
 
-    void Initialize() {}
-    void Shutdown() {}
+    static bool IsOnGroundAndSlow(uintptr_t localPawn, float threshold) {
+        uint32_t flags = 0;
+        __try {
+            flags = *reinterpret_cast<uint32_t*>(localPawn + OffsetConfig::fields.m_fFlags);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
 
-    void Tick() {
-        if (g_enabled == 0) return;
-        if (Renderer::IsMenuOpen()) return;
-        if (!IsGameFocused()) return;
+        if ((flags & 1) == 0) return false;
 
-        if ((GetAsyncKeyState(g_key) & 0x8000) == 0) return;
+        Vec3 vel{};
+        __try {
+            vel = *reinterpret_cast<Vec3*>(localPawn + OffsetConfig::fields.m_vecAbsVelocity);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+
+        const float hSpeed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+        return hSpeed <= threshold;
+    }
+
+    static bool OnCreateMoveFireCheck() {
+        if (g_enabled == 0 || g_onAccuracy == 0) return false;
+        if (!g_onTargetNow.load()) return false;
+        if (Renderer::IsMenuOpen()) return false;
+        if ((GetAsyncKeyState(g_key) & 0x8000) == 0) return false;
 
         uintptr_t localPawn = CombatShared::GetLocalPawn();
-        if (!localPawn) return;
+        if (!localPawn) return false;
+
+        if (!IsOnGroundAndSlow(localPawn, g_accuracySpeed)) return false;
+
+        ULONGLONG now = GetTickCount64();
+        if (now < g_nextFire) return false;
+        g_nextFire = now + kFireCooldownMs;
+
+        return true;
+    }
+
+    void Initialize() {
+        Triggerbot::SetExternalFireCheck(&OnCreateMoveFireCheck);
+    }
+
+    void Shutdown() {
+        Triggerbot::SetExternalFireCheck(nullptr);
+    }
+
+    void Tick() {
+        if (g_enabled == 0) {
+            g_onTargetNow.store(false);
+            return;
+        }
+        if (Renderer::IsMenuOpen()) {
+            g_onTargetNow.store(false);
+            return;
+        }
+        if (!IsGameFocused()) {
+            g_onTargetNow.store(false);
+            return;
+        }
+
+        if ((GetAsyncKeyState(g_key) & 0x8000) == 0) {
+            g_onTargetNow.store(false);
+            return;
+        }
+
+        uintptr_t localPawn = CombatShared::GetLocalPawn();
+        if (!localPawn) {
+            g_onTargetNow.store(false);
+            return;
+        }
 
         Vec3 localEye;
         if (!CombatShared::GetEyePosition(localPawn, localEye)) return;
@@ -85,7 +155,10 @@ namespace Aim {
         if (!ReadViewAngles(currentAngles)) return;
 
         const auto& enemies = CombatShared::GetEnemiesCached();
-        if (enemies.empty()) return;
+        if (enemies.empty()) {
+            g_onTargetNow.store(false);
+            return;
+        }
 
         const uint32_t mask = (uint32_t)g_hitboxes;
         const float maxFov = g_fov;
@@ -112,7 +185,10 @@ namespace Aim {
             bestBone = bone;
         }
 
-        if (!bestEnemy) return;
+        if (!bestEnemy) {
+            g_onTargetNow.store(false);
+            return;
+        }
 
         const Vec3 targetAngles = CombatShared::CalculateAngle(localEye, bestBone);
 
@@ -129,6 +205,13 @@ namespace Aim {
         }
 
         WriteViewAngles(finalAngles);
+
+        {
+            Vec3 checkDelta = targetAngles - finalAngles;
+            CombatShared::NormalizeAngles(checkDelta);
+            const float checkDist = std::sqrt(checkDelta.x * checkDelta.x + checkDelta.y * checkDelta.y);
+            g_onTargetNow.store(checkDist <= kTightAngleDeg);
+        }
     }
 
     bool IsEnabled() { return g_enabled != 0; }
@@ -158,5 +241,15 @@ namespace Aim {
     void SetHitboxes(uint32_t mask) {
         if (mask == 0) mask = HB_HEAD;
         InterlockedExchange(&g_hitboxes, (LONG)mask);
+    }
+
+    bool IsOnAccuracy() { return g_onAccuracy != 0; }
+    void SetOnAccuracy(bool enabled) { InterlockedExchange(&g_onAccuracy, enabled ? 1 : 0); }
+
+    float GetAccuracySpeed() { return g_accuracySpeed; }
+    void SetAccuracySpeed(float speed) {
+        if (speed < 0.5f) speed = 0.5f;
+        if (speed > 50.0f) speed = 50.0f;
+        g_accuracySpeed = speed;
     }
 }

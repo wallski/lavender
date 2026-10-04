@@ -168,6 +168,8 @@ namespace ConfigManager {
         f << "aim.hitboxes=" << (unsigned int)Aim::GetHitboxes() << "\n";
         f << "aim.fov=" << Aim::GetFov() << "\n";
         f << "aim.smooth=" << Aim::GetSmooth() << "\n";
+        f << "aim.on_accuracy=" << (Aim::IsOnAccuracy() ? 1 : 0) << "\n";
+        f << "aim.accuracy_speed=" << Aim::GetAccuracySpeed() << "\n";
 
         f << "menu.key=" << Renderer::GetMenuKey() << "\n";
         f << "menu.accent_r=" << Style::Accent.x << "\n";
@@ -232,6 +234,8 @@ namespace ConfigManager {
         uint32_t aimHitboxes = 1;
         float aimFov = 5.0f;
         int aimSmooth = 3;
+        bool aimOnAccuracy = false;
+        float aimAccuracySpeed = 5.0f;
 
         int menuKey = VK_DELETE;
         float accent[3] = { Style::Accent.x, Style::Accent.y, Style::Accent.z };
@@ -324,6 +328,8 @@ namespace ConfigManager {
             else if (key == "aim.hitboxes") aimHitboxes = (uint32_t)ParseInt(val, (int)aimHitboxes);
             else if (key == "aim.fov") aimFov = ParseFloat(val, aimFov);
             else if (key == "aim.smooth") aimSmooth = ParseInt(val, aimSmooth);
+            else if (key == "aim.on_accuracy") aimOnAccuracy = ParseBool(val);
+            else if (key == "aim.accuracy_speed") aimAccuracySpeed = ParseFloat(val, aimAccuracySpeed);
 
             else if (key == "menu.key") menuKey = ParseInt(val, menuKey);
             else if (key == "menu.accent_r") accent[0] = ParseFloat(val, accent[0]);
@@ -381,6 +387,8 @@ namespace ConfigManager {
         Aim::SetHitboxes(aimHitboxes);
         Aim::SetFov(aimFov);
         Aim::SetSmooth(aimSmooth);
+        Aim::SetOnAccuracy(aimOnAccuracy);
+        Aim::SetAccuracySpeed(aimAccuracySpeed);
 
         Renderer::SetMenuKey(menuKey);
         Style::SetAccent(accent[0], accent[1], accent[2]);

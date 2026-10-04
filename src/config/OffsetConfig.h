@@ -31,6 +31,7 @@ namespace OffsetConfig {
         uint32_t m_bPawnIsAlive = 0;
         uint32_t m_hPawn = 0;
         uint32_t m_fFlags = 0;
+        uint32_t m_vecAbsVelocity = 0;
         uint32_t m_angEyeAngles = 0;
         uint32_t m_pAimPunchServices = 0;
         uint32_t m_pWeaponServices = 0;

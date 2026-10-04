@@ -3,6 +3,8 @@
 
 namespace Triggerbot {
 
+    using ExternalFireCheckFn = bool(*)();
+
     bool Initialize();
     void Shutdown();
 
@@ -23,4 +25,7 @@ namespace Triggerbot {
 
     void Tick();
     void OnGameThreadWrite();
+    void RequestExternalFire();
+
+    void SetExternalFireCheck(ExternalFireCheckFn fn);
 }

@@ -33,6 +33,7 @@ namespace OffsetConfig {
         fields.m_bPawnIsAlive = GeneratedOffsets::Fields::m_bPawnIsAlive;
         fields.m_hPawn = GeneratedOffsets::Fields::m_hPawn;
         fields.m_fFlags = GeneratedOffsets::Fields::m_fFlags;
+        fields.m_vecAbsVelocity = GeneratedOffsets::Fields::m_vecAbsVelocity;
         fields.m_angEyeAngles = GeneratedOffsets::Fields::m_angEyeAngles;
         fields.m_pAimPunchServices = GeneratedOffsets::Fields::m_pAimPunchServices;
         fields.m_pWeaponServices = GeneratedOffsets::Fields::m_pWeaponServices;

@@ -19,10 +19,13 @@ namespace Triggerbot {
     static uintptr_t g_getUsercmdFn = 0;
 
     static std::atomic<bool> g_shouldFire{ false };
+    static std::atomic<bool> g_externalFire{ false };
     static std::atomic<bool> g_attackCurrentlyWritten{ false };
     static ULONGLONG g_onTargetSince = 0;
     static ULONGLONG g_lastOnTarget = 0;
     static ULONGLONG g_nextFireAllowed = 0;
+
+    static ExternalFireCheckFn g_externalFireCheck = nullptr;
 
     static uintptr_t g_createMoveFn = 0;
     static uint8_t* g_createMoveTrampoline = nullptr;
@@ -199,18 +202,25 @@ namespace Triggerbot {
     }
 
     static void DoWrite() {
-        if (g_enabled == 0) {
-            if (g_attackCurrentlyWritten.load()) {
-                g_attackCurrentlyWritten.store(false);
-                WriteAttack(false);
-            }
-            return;
+        bool wantFire = false;
+
+        if (g_enabled != 0 && g_shouldFire.load()) {
+            wantFire = true;
+            g_shouldFire.store(false);
         }
 
-        if (g_shouldFire.load()) {
+        if (g_externalFire.load()) {
+            wantFire = true;
+            g_externalFire.store(false);
+        }
+
+        if (!wantFire && g_externalFireCheck && g_externalFireCheck()) {
+            wantFire = true;
+        }
+
+        if (wantFire) {
             WriteAttack(true);
             g_attackCurrentlyWritten.store(true);
-            g_shouldFire.store(false);
         }
         else if (g_attackCurrentlyWritten.load()) {
             g_attackCurrentlyWritten.store(false);
@@ -385,6 +395,14 @@ namespace Triggerbot {
         DoWrite();
     }
 
+    void RequestExternalFire() {
+        g_externalFire.store(true);
+    }
+
+    void SetExternalFireCheck(ExternalFireCheckFn fn) {
+        g_externalFireCheck = fn;
+    }
+
     bool IsEnabled() { return g_enabled != 0; }
     void SetEnabled(bool enabled) {
         InterlockedExchange(&g_enabled, enabled ? 1 : 0);
@@ -399,7 +417,6 @@ namespace Triggerbot {
     bool GetTeamCheck() { return g_teamCheck != 0; }
     void SetTeamCheck(bool v) {
         InterlockedExchange(&g_teamCheck, v ? 1 : 0);
-        CombatShared::SetIncludeTeammates(!v);
     }
 
     uint32_t GetHitboxes() { return (uint32_t)g_hitboxes; }
@@ -421,6 +438,15 @@ namespace Triggerbot {
         DWORD pid = 0;
         GetWindowThreadProcessId(fg, &pid);
         return pid == GetCurrentProcessId();
+    }
+
+    static int ReadLocalTeam(uintptr_t pawn) {
+        __try {
+            return *reinterpret_cast<int*>(pawn + OffsetConfig::fields.m_iTeamNum);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return 0;
+        }
     }
 
     static bool CheckBone(const Vec3& bonePos, float cx, float cy, float radius) {
@@ -499,11 +525,14 @@ namespace Triggerbot {
         float cy = screenH * 0.5f;
 
         const uint32_t hb = (uint32_t)g_hitboxes;
+        const int teamCheck = g_teamCheck;
+        const int localTeam = ReadLocalTeam(localPawn);
         const auto& enemies = CombatShared::GetEnemiesCached();
 
         bool hasTarget = false;
         for (const auto& e : enemies) {
             if (!e.visible) continue;
+            if (teamCheck != 0 && e.team == localTeam) continue;
             if (CheckEnemy(e, hb, cx, cy)) {
                 hasTarget = true;
                 break;
