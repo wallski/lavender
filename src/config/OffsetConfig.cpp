@@ -16,6 +16,8 @@ namespace OffsetConfig {
         globals.dwGlobalVars = GeneratedOffsets::Globals::dwGlobalVars;
         globals.dwGameRules = GeneratedOffsets::Globals::dwGameRules;
         globals.dwInputSystem = GeneratedOffsets::Globals::dwInputSystem;
+        globals.dwCSGOInput = GeneratedOffsets::Globals::dwCSGOInput;
+        globals.dwViewAngles = GeneratedOffsets::Globals::dwViewAngles;
 
         fields.m_iHealth = GeneratedOffsets::Fields::m_iHealth;
         fields.m_iTeamNum = GeneratedOffsets::Fields::m_iTeamNum;
@@ -44,6 +46,11 @@ namespace OffsetConfig {
         fields.m_iMaxClip1 = GeneratedOffsets::Fields::m_iMaxClip1;
         fields.m_szName = GeneratedOffsets::Fields::m_szName;
         fields.m_nSubclassID = GeneratedOffsets::Fields::m_nSubclassID;
+        fields.m_flFlashBangTime = GeneratedOffsets::Fields::m_flFlashBangTime;
+        fields.m_flFlashScreenshotAlpha = GeneratedOffsets::Fields::m_flFlashScreenshotAlpha;
+        fields.m_flFlashOverlayAlpha = GeneratedOffsets::Fields::m_flFlashOverlayAlpha;
+        fields.m_flFlashMaxAlpha = GeneratedOffsets::Fields::m_flFlashMaxAlpha;
+        fields.m_flFlashDuration = GeneratedOffsets::Fields::m_flFlashDuration;
 
         if (globals.dwEntityList == 0 ||
             globals.dwLocalPlayerPawn == 0 ||
@@ -88,6 +95,8 @@ namespace OffsetConfig {
         globals.dwLocalPlayerPawn += clientBase;
         globals.dwViewMatrix += clientBase;
         globals.dwGameRules += clientBase;
+        globals.dwCSGOInput += clientBase;
+        globals.dwViewAngles += clientBase;
         globals.dwGlobalVars += engineBase;
         globals.dwInputSystem += inputBase;
 
@@ -110,6 +119,8 @@ namespace OffsetConfig {
         printf("  dwGameRules             = 0x%llX\n", (unsigned long long)globals.dwGameRules);
         printf("  dwGlobalVars            = 0x%llX\n", (unsigned long long)globals.dwGlobalVars);
         printf("  dwInputSystem           = 0x%llX\n", (unsigned long long)globals.dwInputSystem);
+        printf("  dwCSGOInput             = 0x%llX\n", (unsigned long long)globals.dwCSGOInput);
+        printf("  dwViewAngles            = 0x%llX\n", (unsigned long long)globals.dwViewAngles);
         printf("  dwGameTraceManager      = 0x%llX\n", (unsigned long long)globals.dwGameTraceManager);
         fflush(stdout);
     }

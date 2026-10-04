@@ -6,6 +6,7 @@
 #include "../features/visuals/removals/Removals.h"
 #include "../features/visuals/skybox/Skybox.h"
 #include "../features/combat/legit/triggerbot/Triggerbot.h"
+#include "../features/combat/legit/aim/Aim.h"
 #include "../../render/Renderer.h"
 #include "../../render/Style.h"
 #include <filesystem>
@@ -161,6 +162,13 @@ namespace ConfigManager {
         f << "trigger.hitboxes=" << (unsigned int)Triggerbot::GetHitboxes() << "\n";
         f << "trigger.delay=" << Triggerbot::GetDelayMs() << "\n";
 
+        f << "aim.enabled=" << (Aim::IsEnabled() ? 1 : 0) << "\n";
+        f << "aim.key=" << Aim::GetKey() << "\n";
+        f << "aim.team_check=" << (Aim::IsTeamCheck() ? 1 : 0) << "\n";
+        f << "aim.hitboxes=" << (unsigned int)Aim::GetHitboxes() << "\n";
+        f << "aim.fov=" << Aim::GetFov() << "\n";
+        f << "aim.smooth=" << Aim::GetSmooth() << "\n";
+
         f << "menu.key=" << Renderer::GetMenuKey() << "\n";
         f << "menu.accent_r=" << Style::Accent.x << "\n";
         f << "menu.accent_g=" << Style::Accent.y << "\n";
@@ -217,6 +225,14 @@ namespace ConfigManager {
         bool triggerTeamCheck = true;
         uint32_t triggerHitboxes = 1;
         int triggerDelay = 60;
+
+        bool aimEnabled = false;
+        int aimKey = VK_XBUTTON1;
+        bool aimTeamCheck = true;
+        uint32_t aimHitboxes = 1;
+        float aimFov = 5.0f;
+        int aimSmooth = 3;
+
         int menuKey = VK_DELETE;
         float accent[3] = { Style::Accent.x, Style::Accent.y, Style::Accent.z };
 
@@ -301,6 +317,14 @@ namespace ConfigManager {
             else if (key == "trigger.team_check") triggerTeamCheck = ParseBool(val);
             else if (key == "trigger.hitboxes") triggerHitboxes = (uint32_t)ParseInt(val, (int)triggerHitboxes);
             else if (key == "trigger.delay") triggerDelay = ParseInt(val, triggerDelay);
+
+            else if (key == "aim.enabled") aimEnabled = ParseBool(val);
+            else if (key == "aim.key") aimKey = ParseInt(val, aimKey);
+            else if (key == "aim.team_check") aimTeamCheck = ParseBool(val);
+            else if (key == "aim.hitboxes") aimHitboxes = (uint32_t)ParseInt(val, (int)aimHitboxes);
+            else if (key == "aim.fov") aimFov = ParseFloat(val, aimFov);
+            else if (key == "aim.smooth") aimSmooth = ParseInt(val, aimSmooth);
+
             else if (key == "menu.key") menuKey = ParseInt(val, menuKey);
             else if (key == "menu.accent_r") accent[0] = ParseFloat(val, accent[0]);
             else if (key == "menu.accent_g") accent[1] = ParseFloat(val, accent[1]);
@@ -350,6 +374,14 @@ namespace ConfigManager {
         Triggerbot::SetTeamCheck(triggerTeamCheck);
         Triggerbot::SetHitboxes(triggerHitboxes);
         Triggerbot::SetDelayMs(triggerDelay);
+
+        Aim::SetEnabled(aimEnabled);
+        Aim::SetKey(aimKey);
+        Aim::SetTeamCheck(aimTeamCheck);
+        Aim::SetHitboxes(aimHitboxes);
+        Aim::SetFov(aimFov);
+        Aim::SetSmooth(aimSmooth);
+
         Renderer::SetMenuKey(menuKey);
         Style::SetAccent(accent[0], accent[1], accent[2]);
         Style::Apply();

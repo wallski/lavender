@@ -191,6 +191,7 @@
     <ClCompile Include="src\core\config\ConfigManager.cpp" />
     <ClCompile Include="src\core\cvar\CVar.cpp" />
     <ClCompile Include="src\core\features\combat\CombatShared.cpp" />
+    <ClCompile Include="src\core\features\combat\legit\aim\Aim.cpp" />
     <ClCompile Include="src\core\features\combat\legit\triggerbot\Triggerbot.cpp" />
     <ClCompile Include="src\core\features\visuals\chams\Chams.cpp" />
     <ClCompile Include="src\core\features\visuals\chams\Materials.cpp" />
@@ -271,6 +272,7 @@
     <ClInclude Include="src\config\GeneratedOffsets.h" />
     <ClInclude Include="src\core\cvar\CVar.h" />
     <ClInclude Include="src\core\features\combat\CombatShared.h" />
+    <ClInclude Include="src\core\features\combat\legit\aim\Aim.h" />
     <ClInclude Include="src\core\features\combat\legit\triggerbot\Triggerbot.h" />
     <ClInclude Include="src\core\features\visuals\chams\Chams.h" />
     <ClInclude Include="src\core\features\visuals\chams\Materials.h" />

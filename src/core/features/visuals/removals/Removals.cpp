@@ -25,8 +25,11 @@ namespace Removals {
         if (!IsValidPtr(localPawn)) return;
 
         __try {
-            *reinterpret_cast<float*>(localPawn + 0x14FC) = 0.0f;
-            *reinterpret_cast<float*>(localPawn + 0x1504) = 0.0f;
+            *reinterpret_cast<float*>(localPawn + OffsetConfig::fields.m_flFlashBangTime) = 0.0f;
+            *reinterpret_cast<float*>(localPawn + OffsetConfig::fields.m_flFlashScreenshotAlpha) = 0.0f;
+            *reinterpret_cast<float*>(localPawn + OffsetConfig::fields.m_flFlashOverlayAlpha) = 0.0f;
+            *reinterpret_cast<float*>(localPawn + OffsetConfig::fields.m_flFlashMaxAlpha) = 0.0f;
+            *reinterpret_cast<float*>(localPawn + OffsetConfig::fields.m_flFlashDuration) = 0.0f;
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
     }

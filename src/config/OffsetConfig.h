@@ -12,6 +12,8 @@ namespace OffsetConfig {
         uintptr_t dwGameRules = 0;
         uintptr_t dwInputSystem = 0;
         uintptr_t dwGameTraceManager = 0;
+        uintptr_t dwCSGOInput = 0;
+        uintptr_t dwViewAngles = 0;
     };
 
     struct Fields {
@@ -42,6 +44,11 @@ namespace OffsetConfig {
         uint32_t m_iMaxClip1 = 0;
         uint32_t m_szName = 0;
         uint32_t m_nSubclassID = 0;
+        uint32_t m_flFlashBangTime = 0;
+        uint32_t m_flFlashScreenshotAlpha = 0;
+        uint32_t m_flFlashOverlayAlpha = 0;
+        uint32_t m_flFlashMaxAlpha = 0;
+        uint32_t m_flFlashDuration = 0;
     };
 
     extern Globals globals;

@@ -11,6 +11,8 @@ namespace GeneratedOffsets {
         constexpr uintptr_t dwGlobalVars = 0x222BE98;
         constexpr uintptr_t dwGameRules = 0x255CE50;
         constexpr uintptr_t dwInputSystem = 0x46BC0;
+        constexpr uintptr_t dwCSGOInput = 0x2576150;
+        constexpr uintptr_t dwViewAngles = 0x25767D8;
     }
 
     namespace Fields {
@@ -41,6 +43,11 @@ namespace GeneratedOffsets {
         constexpr uint32_t m_iMaxClip1 = 0x4D0;
         constexpr uint32_t m_szName = 0x720;
         constexpr uint32_t m_nSubclassID = 0x380;
+        constexpr uint32_t m_flFlashBangTime = 0x14FC;
+        constexpr uint32_t m_flFlashScreenshotAlpha = 0x1500;
+        constexpr uint32_t m_flFlashOverlayAlpha = 0x1504;
+        constexpr uint32_t m_flFlashMaxAlpha = 0x150C;
+        constexpr uint32_t m_flFlashDuration = 0x1510;
     }
 
 }

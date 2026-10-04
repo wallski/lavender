@@ -10,16 +10,19 @@
 #include "../core/features/visuals/removals/Removals.h"
 #include "../core/features/visuals/skybox/Skybox.h"
 #include "../core/features/combat/legit/triggerbot/Triggerbot.h"
+#include "../core/features/combat/legit/aim/Aim.h"
 #include "../core/config/ConfigManager.h"
 
 namespace Menu {
 
     static int g_activeTab = 0;
+    static int g_legitSubTab = 0;
     static int g_visualsSubTab = 0;
     static int g_menuKey = VK_DELETE;
     static char g_configNameBuf[64] = "default";
     static std::string g_pendingDelete;
 
+    static const char* kLegitSubTabs[] = { "Aim", "Trigger" };
     static const char* kVisualsSubTabs[] = { "Chams", "ESP", "Info" };
 
     static const char* kMaterialNames[] = {
@@ -37,7 +40,7 @@ namespace Menu {
     int GetMenuKey() { return g_menuKey; }
     void SetMenuKey(int key) { g_menuKey = key; }
 
-    static void DrawHitboxDropdown(uint32_t* hitboxes) {
+    static void DrawHitboxDropdown(uint32_t* hitboxes, void (*setter)(uint32_t)) {
         constexpr float rowH = 30.0f;
         ImGui::PushID("##hitbox_dropdown");
 
@@ -80,7 +83,7 @@ namespace Menu {
                     if (on) *hitboxes |= (1u << i);
                     else    *hitboxes &= ~(1u << i);
                     if (*hitboxes == 0) *hitboxes = 1u << i;
-                    Triggerbot::SetHitboxes(*hitboxes);
+                    if (setter) setter(*hitboxes);
                 }
             }
             ImGui::EndPopup();
@@ -89,12 +92,46 @@ namespace Menu {
         ImGui::PopID();
     }
 
-    static void DrawLegitTab() {
+    static void DrawAimCard() {
+        bool enabled = Aim::IsEnabled();
+        int key = Aim::GetKey();
+        bool teamCheck = Aim::IsTeamCheck();
+        float fov = Aim::GetFov();
+        int smooth = Aim::GetSmooth();
+
+        Widgets::BeginCard("AIMBOT", 5);
+
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            Aim::SetEnabled(enabled);
+        }
+        if (Widgets::Keybind("Aim key", &key)) {
+            Aim::SetKey(key);
+        }
+        if (Widgets::Toggle("Team check", &teamCheck)) {
+            Aim::SetTeamCheck(teamCheck);
+        }
+        if (Widgets::SliderFloat("FOV", &fov, 0.5f, 30.0f, "%.1f")) {
+            Aim::SetFov(fov);
+        }
+        if (Widgets::SliderInt("Smooth", &smooth, 1, 30)) {
+            Aim::SetSmooth(smooth);
+        }
+
+        Widgets::EndCard();
+    }
+
+    static void DrawAimHitboxCard() {
+        uint32_t hitboxes = Aim::GetHitboxes();
+
+        Widgets::BeginCard("HITBOXES", 1);
+        DrawHitboxDropdown(&hitboxes, Aim::SetHitboxes);
+        Widgets::EndCard();
+    }
+
+    static void DrawTriggerCard() {
         bool enabled = Triggerbot::IsEnabled();
         int key = Triggerbot::GetKey();
         bool teamCheck = Triggerbot::GetTeamCheck();
-        uint32_t hitboxes = Triggerbot::GetHitboxes();
-        int delay = Triggerbot::GetDelayMs();
 
         Widgets::BeginCard("TRIGGERBOT", 3);
 
@@ -109,10 +146,18 @@ namespace Menu {
         }
 
         Widgets::EndCard();
+    }
+
+    static void DrawTriggerHitboxCard() {
+        uint32_t hitboxes = Triggerbot::GetHitboxes();
 
         Widgets::BeginCard("HITBOXES", 1);
-        DrawHitboxDropdown(&hitboxes);
+        DrawHitboxDropdown(&hitboxes, Triggerbot::SetHitboxes);
         Widgets::EndCard();
+    }
+
+    static void DrawTriggerTimingCard() {
+        int delay = Triggerbot::GetDelayMs();
 
         Widgets::BeginCard("TIMING", 2);
         if (Widgets::SliderInt("On-target ms", &delay, 0, 1000)) {
@@ -124,6 +169,69 @@ namespace Menu {
             Triggerbot::SetDelayMs(delay);
         }
         Widgets::EndCard();
+    }
+
+    static void DrawAimSubTab() {
+        const float totalW = ImGui::GetContentRegionAvail().x;
+        const float gap = 10.0f;
+        const float colW = (totalW - gap) * 0.5f;
+
+        ImGui::BeginChild("##aim_col_left", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        DrawAimCard();
+        ImGui::EndChild();
+
+        ImGui::SameLine(0, gap);
+
+        ImGui::BeginChild("##aim_col_right", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        DrawAimHitboxCard();
+        ImGui::EndChild();
+    }
+
+    static void DrawTriggerSubTab() {
+        const float totalW = ImGui::GetContentRegionAvail().x;
+        const float gap = 10.0f;
+        const float colW = (totalW - gap) * 0.5f;
+
+        ImGui::BeginChild("##trigger_col_left", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        DrawTriggerCard();
+        ImGui::EndChild();
+
+        ImGui::SameLine(0, gap);
+
+        ImGui::BeginChild("##trigger_col_right", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        DrawTriggerHitboxCard();
+        DrawTriggerTimingCard();
+        ImGui::EndChild();
+    }
+
+    static void DrawSubTabBar(const char* const* names, int count, int* current) {
+        ImGui::Dummy(ImVec2(0, 2));
+        for (int i = 0; i < count; i++) {
+            Widgets::TopTab(names[i], current, i);
+        }
+        ImGui::NewLine();
+
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        const float w = ImGui::GetContentRegionAvail().x;
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(p.x, p.y - 6.0f),
+            ImVec2(p.x + w, p.y - 6.0f),
+            ImGui::GetColorU32(Style::Border), 1.0f);
+
+        ImGui::Dummy(ImVec2(0, 8));
+    }
+
+    static void DrawLegitTab() {
+        DrawSubTabBar(kLegitSubTabs, IM_ARRAYSIZE(kLegitSubTabs), &g_legitSubTab);
+
+        switch (g_legitSubTab) {
+        case 0: DrawAimSubTab();     break;
+        case 1: DrawTriggerSubTab(); break;
+        }
     }
 
     static void DrawChamsCard() {
@@ -220,23 +328,6 @@ namespace Menu {
         }
 
         Widgets::EndCard();
-    }
-
-    static void DrawSubTabBar(const char* const* names, int count, int* current) {
-        ImGui::Dummy(ImVec2(0, 2));
-        for (int i = 0; i < count; i++) {
-            Widgets::TopTab(names[i], current, i);
-        }
-        ImGui::NewLine();
-
-        const ImVec2 p = ImGui::GetCursorScreenPos();
-        const float w = ImGui::GetContentRegionAvail().x;
-        ImGui::GetWindowDrawList()->AddLine(
-            ImVec2(p.x, p.y - 6.0f),
-            ImVec2(p.x + w, p.y - 6.0f),
-            ImGui::GetColorU32(Style::Border), 1.0f);
-
-        ImGui::Dummy(ImVec2(0, 8));
     }
 
     static void DrawEspSubTab() {

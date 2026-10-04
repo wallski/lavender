@@ -67,7 +67,9 @@ $globalNames = @(
     "dwViewMatrix",
     "dwGlobalVars",
     "dwGameRules",
-    "dwInputSystem"
+    "dwInputSystem",
+    "dwCSGOInput",
+    "dwViewAngles"
 )
 
 $fieldNames = @(
@@ -97,7 +99,12 @@ $fieldNames = @(
     "m_iClip1",
     "m_iMaxClip1",
     "m_szName",
-    "m_nSubclassID"
+    "m_nSubclassID",
+    "m_flFlashBangTime",
+    "m_flFlashScreenshotAlpha",
+    "m_flFlashOverlayAlpha",
+    "m_flFlashMaxAlpha",
+    "m_flFlashDuration"
 )
 
 $lines = New-Object System.Collections.Generic.List[string]

@@ -10,6 +10,7 @@
 #include "../core/features/visuals/removals/Removals.h"
 #include "../core/features/combat/CombatShared.h"
 #include "../core/features/combat/legit/triggerbot/Triggerbot.h"
+#include "../core/features/combat/legit/aim/Aim.h"
 #include "../config/OffsetConfig.h"
 
 LRESULT WINAPI ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -204,6 +205,7 @@ namespace Renderer {
         CombatShared::BeginFrame();
         Removals::Update();
         Triggerbot::Tick();
+        Aim::Tick();
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
