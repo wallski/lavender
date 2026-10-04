@@ -1,10 +1,12 @@
 #include "pch.h"
 #include "Esp.h"
 #include "../../combat/CombatShared.h"
+#include "../../combat/legit/aim/Aim.h"
 #include "../../../../config/OffsetConfig.h"
 #include "imgui.h"
 #include <cfloat>
 #include <cstdio>
+#include <cmath>
 
 namespace Esp {
 
@@ -39,6 +41,14 @@ namespace Esp {
     static volatile LONG g_nameEnabled = 0;
     static volatile LONG g_namePosition = 0;
     static float g_nameColor[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
+
+    static volatile LONG g_skeletonEnabled = 0;
+    static float g_skeletonColor[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+    static float g_skeletonThickness = 1.5f;
+    static volatile LONG g_skeletonDebug = 0;
+
+    static volatile LONG g_fovCircleEnabled = 0;
+    static float g_fovCircleColor[4] = { 0.659f, 0.333f, 0.969f, 0.85f };
 
     struct Bounds {
         float minX;
@@ -405,6 +415,101 @@ namespace Esp {
         DrawOutlinedText(dl, x, y, e.name.c_str(), ToU32(g_nameColor));
     }
 
+    static void DrawBoneDebug(ImDrawList* dl, const CombatShared::Enemy& e) {
+        const ImU32 dotCol = IM_COL32(255, 255, 0, 255);
+        const ImU32 textCol = IM_COL32(255, 255, 255, 255);
+        const ImU32 textOut = IM_COL32(0, 0, 0, 255);
+
+        for (int i = 0; i < 32; i++) {
+            if (e.bones[i].Length() < 1.0f) continue;
+            Vec3 s;
+            if (!CombatShared::WorldToScreen(e.bones[i], s)) continue;
+
+            dl->AddCircleFilled(ImVec2(s.x, s.y), 4.0f, dotCol);
+            dl->AddCircle(ImVec2(s.x, s.y), 4.0f, IM_COL32(0, 0, 0, 255), 0, 1.5f);
+
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%d", i);
+            const ImVec2 ts = ImGui::CalcTextSize(buf);
+            const float tx = s.x + 6.0f;
+            const float ty = s.y - ts.y * 0.5f;
+
+            dl->AddText(ImVec2(tx + 1.0f, ty + 1.0f), textOut, buf);
+            dl->AddText(ImVec2(tx - 1.0f, ty + 1.0f), textOut, buf);
+            dl->AddText(ImVec2(tx + 1.0f, ty - 1.0f), textOut, buf);
+            dl->AddText(ImVec2(tx - 1.0f, ty - 1.0f), textOut, buf);
+            dl->AddText(ImVec2(tx, ty), textCol, buf);
+        }
+    }
+
+    static void DrawSkeleton(ImDrawList* dl, const CombatShared::Enemy& e) {
+        if (g_skeletonEnabled == 0) return;
+
+        static const int kPairs[][2] = {
+            { 7, 6 },
+            { 6, 5 },
+            { 5, 4 },
+            { 4, 3 },
+            { 3, 2 },
+            { 2, 1 },
+            { 6, 8 },
+            { 8, 9 },
+            { 9, 10 },
+            { 6, 12 },
+            { 12, 13 },
+            { 13, 14 },
+            { 1, 16 },
+            { 16, 17 },
+            { 17, 18 },
+            { 1, 19 },
+            { 19, 20 },
+            { 20, 21 },
+        };
+
+        const ImU32 color = ToU32(g_skeletonColor);
+        const ImU32 outline = IM_COL32(0, 0, 0, 200);
+        constexpr int kPairCount = (int)(sizeof(kPairs) / sizeof(kPairs[0]));
+        const float thick = g_skeletonThickness;
+
+        for (int i = 0; i < kPairCount; i++) {
+            const int a = kPairs[i][0];
+            const int b = kPairs[i][1];
+            if (e.bones[a].Length() < 1.0f) continue;
+            if (e.bones[b].Length() < 1.0f) continue;
+
+            const float da = (e.bones[a] - e.origin).Length();
+            const float db = (e.bones[b] - e.origin).Length();
+            if (da > 150.0f || db > 150.0f) continue;
+
+            Vec3 sa, sb;
+            if (!CombatShared::WorldToScreen(e.bones[a], sa)) continue;
+            if (!CombatShared::WorldToScreen(e.bones[b], sb)) continue;
+
+            dl->AddLine(ImVec2(sa.x, sa.y), ImVec2(sb.x, sb.y), outline, thick + 1.5f);
+            dl->AddLine(ImVec2(sa.x, sa.y), ImVec2(sb.x, sb.y), color, thick);
+        }
+    }
+
+    static void DrawFovCircle(ImDrawList* dl) {
+        if (g_fovCircleEnabled == 0) return;
+
+        const float fovDeg = Aim::GetFov();
+        if (fovDeg < 0.1f || fovDeg > 90.0f) return;
+
+        ImGuiIO& io = ImGui::GetIO();
+        const float cx = io.DisplaySize.x * 0.5f;
+        const float cy = io.DisplaySize.y * 0.5f;
+
+        const float fovRad = fovDeg * 3.14159265f / 180.0f;
+
+        constexpr float kHalfVfovTan = 0.62f;
+        const float radius = (io.DisplaySize.y * 0.5f) * tanf(fovRad) / kHalfVfovTan;
+
+        if (radius < 1.0f || radius > 4000.0f) return;
+
+        dl->AddCircle(ImVec2(cx, cy), radius, ToU32(g_fovCircleColor), 0, 1.5f);
+    }
+
     void Render() {
         if (g_enabled == 0) return;
 
@@ -422,6 +527,12 @@ namespace Esp {
         for (const auto& e : enemies) {
             if (g_teamCheck != 0 && e.team == localTeam) continue;
 
+            if (g_skeletonDebug != 0) {
+                DrawBoneDebug(dl, e);
+            }
+
+            DrawSkeleton(dl, e);
+
             Bounds b;
             if (!ComputeBounds(e.pawn, e.origin, b)) continue;
 
@@ -432,6 +543,8 @@ namespace Esp {
             DrawAmmoBar(dl, b, e, off);
             DrawName(dl, b, e, off);
         }
+
+        DrawFovCircle(dl);
     }
 
     void Shutdown() {}
@@ -580,4 +693,35 @@ namespace Esp {
         g_nameColor[3] = color[3];
     }
 
+    bool IsSkeletonEnabled() { return g_skeletonEnabled != 0; }
+    void SetSkeletonEnabled(bool enabled) { InterlockedExchange(&g_skeletonEnabled, enabled ? 1 : 0); }
+
+    float* GetSkeletonColor() { return g_skeletonColor; }
+    void SetSkeletonColor(const float color[4]) {
+        g_skeletonColor[0] = color[0];
+        g_skeletonColor[1] = color[1];
+        g_skeletonColor[2] = color[2];
+        g_skeletonColor[3] = color[3];
+    }
+
+    float GetSkeletonThickness() { return g_skeletonThickness; }
+    void SetSkeletonThickness(float thickness) {
+        if (thickness < 0.5f) thickness = 0.5f;
+        if (thickness > 5.0f) thickness = 5.0f;
+        g_skeletonThickness = thickness;
+    }
+
+    bool IsSkeletonDebug() { return g_skeletonDebug != 0; }
+    void SetSkeletonDebug(bool enabled) { InterlockedExchange(&g_skeletonDebug, enabled ? 1 : 0); }
+
+    bool IsFovCircleEnabled() { return g_fovCircleEnabled != 0; }
+    void SetFovCircleEnabled(bool enabled) { InterlockedExchange(&g_fovCircleEnabled, enabled ? 1 : 0); }
+
+    float* GetFovCircleColor() { return g_fovCircleColor; }
+    void SetFovCircleColor(const float color[4]) {
+        g_fovCircleColor[0] = color[0];
+        g_fovCircleColor[1] = color[1];
+        g_fovCircleColor[2] = color[2];
+        g_fovCircleColor[3] = color[3];
+    }
 }

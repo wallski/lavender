@@ -31,7 +31,6 @@ namespace OffsetConfig {
         fields.m_vecViewOffset = GeneratedOffsets::Fields::m_vecViewOffset;
         fields.m_bGunGameImmunity = GeneratedOffsets::Fields::m_bGunGameImmunity;
         fields.m_bPawnIsAlive = GeneratedOffsets::Fields::m_bPawnIsAlive;
-        fields.m_hPawn = GeneratedOffsets::Fields::m_hPawn;
         fields.m_fFlags = GeneratedOffsets::Fields::m_fFlags;
         fields.m_vecAbsVelocity = GeneratedOffsets::Fields::m_vecAbsVelocity;
         fields.m_angEyeAngles = GeneratedOffsets::Fields::m_angEyeAngles;

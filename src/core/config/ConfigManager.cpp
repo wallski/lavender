@@ -151,6 +151,22 @@ namespace ConfigManager {
         f << "esp.name_color_b=" << nc[2] << "\n";
         f << "esp.name_color_a=" << nc[3] << "\n";
 
+        f << "esp.skeleton_enabled=" << (Esp::IsSkeletonEnabled() ? 1 : 0) << "\n";
+        const float* sc = Esp::GetSkeletonColor();
+        f << "esp.skeleton_color_r=" << sc[0] << "\n";
+        f << "esp.skeleton_color_g=" << sc[1] << "\n";
+        f << "esp.skeleton_color_b=" << sc[2] << "\n";
+        f << "esp.skeleton_color_a=" << sc[3] << "\n";
+        f << "esp.skeleton_thickness=" << Esp::GetSkeletonThickness() << "\n";
+        f << "esp.skeleton_debug=" << (Esp::IsSkeletonDebug() ? 1 : 0) << "\n";
+
+        f << "esp.fov_circle_enabled=" << (Esp::IsFovCircleEnabled() ? 1 : 0) << "\n";
+        const float* fcc = Esp::GetFovCircleColor();
+        f << "esp.fov_circle_color_r=" << fcc[0] << "\n";
+        f << "esp.fov_circle_color_g=" << fcc[1] << "\n";
+        f << "esp.fov_circle_color_b=" << fcc[2] << "\n";
+        f << "esp.fov_circle_color_a=" << fcc[3] << "\n";
+
         f << "removals.flash=" << (Removals::IsFlashEnabled() ? 1 : 0) << "\n";
 
         f << "world.skybox_enabled=" << (Skybox::IsEnabled() ? 1 : 0) << "\n";
@@ -218,6 +234,14 @@ namespace ConfigManager {
         bool espNameEnabled = false;
         int espNamePosition = 0;
         float espNameColor[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
+
+        bool espSkeletonEnabled = false;
+        float espSkeletonColor[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+        float espSkeletonThickness = 1.5f;
+        bool espSkeletonDebug = false;
+
+        bool espFovCircleEnabled = false;
+        float espFovCircleColor[4] = { 0.659f, 0.333f, 0.969f, 0.85f };
 
         bool removalsFlash = false;
         bool skyboxEnabled = false;
@@ -313,6 +337,20 @@ namespace ConfigManager {
             else if (key == "esp.name_color_b") espNameColor[2] = ParseFloat(val, espNameColor[2]);
             else if (key == "esp.name_color_a") espNameColor[3] = ParseFloat(val, espNameColor[3]);
 
+            else if (key == "esp.skeleton_enabled") espSkeletonEnabled = ParseBool(val);
+            else if (key == "esp.skeleton_color_r") espSkeletonColor[0] = ParseFloat(val, espSkeletonColor[0]);
+            else if (key == "esp.skeleton_color_g") espSkeletonColor[1] = ParseFloat(val, espSkeletonColor[1]);
+            else if (key == "esp.skeleton_color_b") espSkeletonColor[2] = ParseFloat(val, espSkeletonColor[2]);
+            else if (key == "esp.skeleton_color_a") espSkeletonColor[3] = ParseFloat(val, espSkeletonColor[3]);
+            else if (key == "esp.skeleton_thickness") espSkeletonThickness = ParseFloat(val, espSkeletonThickness);
+            else if (key == "esp.skeleton_debug") espSkeletonDebug = ParseBool(val);
+
+            else if (key == "esp.fov_circle_enabled") espFovCircleEnabled = ParseBool(val);
+            else if (key == "esp.fov_circle_color_r") espFovCircleColor[0] = ParseFloat(val, espFovCircleColor[0]);
+            else if (key == "esp.fov_circle_color_g") espFovCircleColor[1] = ParseFloat(val, espFovCircleColor[1]);
+            else if (key == "esp.fov_circle_color_b") espFovCircleColor[2] = ParseFloat(val, espFovCircleColor[2]);
+            else if (key == "esp.fov_circle_color_a") espFovCircleColor[3] = ParseFloat(val, espFovCircleColor[3]);
+
             else if (key == "removals.flash") removalsFlash = ParseBool(val);
             else if (key == "world.skybox_enabled") skyboxEnabled = ParseBool(val);
             else if (key == "world.skybox_index") skyboxIndex = ParseInt(val, skyboxIndex);
@@ -371,6 +409,14 @@ namespace ConfigManager {
         Esp::SetNameEnabled(espNameEnabled);
         Esp::SetNamePosition(espNamePosition);
         Esp::SetNameColor(espNameColor);
+
+        Esp::SetSkeletonEnabled(espSkeletonEnabled);
+        Esp::SetSkeletonColor(espSkeletonColor);
+        Esp::SetSkeletonThickness(espSkeletonThickness);
+        Esp::SetSkeletonDebug(espSkeletonDebug);
+
+        Esp::SetFovCircleEnabled(espFovCircleEnabled);
+        Esp::SetFovCircleColor(espFovCircleColor);
 
         Removals::SetFlashEnabled(removalsFlash);
         Skybox::SetEnabled(skyboxEnabled);

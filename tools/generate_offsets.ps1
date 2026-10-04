@@ -60,6 +60,22 @@ $json = Get-Content $jsonPath -Raw
 $hpp = Get-Content $hppPath -Raw
 $jsonData = $json | ConvertFrom-Json
 
+function Get-NamespacedConstant {
+    param([string]$Hpp, [string]$Namespace, [string]$Name)
+    $nsPattern = 'namespace\s+' + [regex]::Escape($Namespace) + '\s*\{'
+    $nsMatch = [regex]::Match($Hpp, $nsPattern)
+    if (-not $nsMatch.Success) { return $null }
+
+    $start = $nsMatch.Index + $nsMatch.Length
+    $end = [Math]::Min($start + 16384, $Hpp.Length)
+    $block = $Hpp.Substring($start, $end - $start)
+
+    $pattern = '(?<![A-Za-z0-9_])' + [regex]::Escape($Name) + '\s*=\s*(0x[0-9A-Fa-f]+)'
+    $m = [regex]::Match($block, $pattern)
+    if ($m.Success) { return $m.Groups[1].Value }
+    return $null
+}
+
 $globalNames = @(
     "dwEntityList",
     "dwLocalPlayerController",
@@ -85,7 +101,6 @@ $fieldNames = @(
     "m_vecViewOffset",
     "m_bGunGameImmunity",
     "m_bPawnIsAlive",
-    "m_hPawn",
     "m_fFlags",
     "m_vecAbsVelocity",
     "m_angEyeAngles",
@@ -107,6 +122,12 @@ $fieldNames = @(
     "m_flFlashMaxAlpha",
     "m_flFlashDuration"
 )
+
+$specialFields = @{
+    "m_hPlayerPawn" = @{ Namespace = "CCSPlayerController"; Name = "m_hPlayerPawn" }
+    "m_bPawnIsAlive" = @{ Namespace = "CCSPlayerController"; Name = "m_bPawnIsAlive" }
+    "m_sSanitizedPlayerName" = @{ Namespace = "CCSPlayerController"; Name = "m_sSanitizedPlayerName" }
+}
 
 $lines = New-Object System.Collections.Generic.List[string]
 $lines.Add("#pragma once")
@@ -143,10 +164,24 @@ $lines.Add("    namespace Fields {")
 
 $missingFields = 0
 foreach ($name in $fieldNames) {
-    $pattern = '(?<![A-Za-z0-9_])' + [regex]::Escape($name) + '\s*=\s*(0x[0-9A-Fa-f]+)'
-    $match = [regex]::Match($hpp, $pattern)
-    if ($match.Success) {
-        $hexVal = $match.Groups[1].Value
+    $hexVal = $null
+
+    if ($specialFields.ContainsKey($name)) {
+        $spec = $specialFields[$name]
+        $hexVal = Get-NamespacedConstant -Hpp $hpp -Namespace $spec.Namespace -Name $spec.Name
+        if (-not $hexVal) {
+            Write-Host "[gen-offsets] WARN: namespaced field '$($spec.Namespace)::$($spec.Name)' not found" -ForegroundColor Yellow
+        }
+    }
+    else {
+        $pattern = '(?<![A-Za-z0-9_])' + [regex]::Escape($name) + '\s*=\s*(0x[0-9A-Fa-f]+)'
+        $match = [regex]::Match($hpp, $pattern)
+        if ($match.Success) {
+            $hexVal = $match.Groups[1].Value
+        }
+    }
+
+    if ($hexVal) {
         $lines.Add("        constexpr uint32_t $name = $hexVal;")
     }
     else {

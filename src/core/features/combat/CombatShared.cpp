@@ -15,11 +15,22 @@ namespace CombatShared {
 
     static constexpr uintptr_t kPtrMin = 0x0000000000010000;
     static constexpr uintptr_t kPtrMax = 0x00007FFFFFFFFFFF;
-    static constexpr int kMaxEntityIndex = 2048;
+    static constexpr int kMaxEntityIndex = 4096;
     static constexpr int kMaxPlayers = 64;
+    static constexpr int kMaxBones = 32;
 
     static inline bool IsUserPtr(uintptr_t p) {
         return p >= kPtrMin && p <= kPtrMax;
+    }
+
+    static bool SafeReadBone(Vec3* dst, uintptr_t src) {
+        __try {
+            *dst = *reinterpret_cast<Vec3*>(src);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
     }
 
     static uintptr_t ReadPtr(uintptr_t addr) {
@@ -32,19 +43,9 @@ namespace CombatShared {
         __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
     }
 
-    static uint32_t ReadU32(uintptr_t addr) {
-        __try { return *(uint32_t*)addr; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
-    }
-
     static bool ReadBool(uintptr_t addr) {
         __try { return *(bool*)addr; }
         __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
-    }
-
-    static float ReadFloat(uintptr_t addr) {
-        __try { return *(float*)addr; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return 0.0f; }
     }
 
     static Vec3 ReadVec3(uintptr_t addr) {
@@ -53,13 +54,8 @@ namespace CombatShared {
     }
 
     void Initialize() {
-        g_traceRayFn = 0;
         g_traceFilterInitFn = Memory::FindPattern("client.dll",
             "48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 0F B6 41 ?? 33 FF 24");
-
-        printf("[CombatShared] trace=disabled filter_init=0x%llX\n",
-            (unsigned long long)g_traceFilterInitFn);
-        fflush(stdout);
     }
 
     void Shutdown() {}
@@ -144,13 +140,7 @@ namespace CombatShared {
         int count = 0;
         if (!GetBoneCache(entity, cache, count)) return false;
         if (boneId < 0 || boneId >= count) return false;
-        __try {
-            out = *(Vec3*)(cache + boneId * sizeof(BoneData));
-            return true;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER) {
-            return false;
-        }
+        return SafeReadBone(&out, cache + boneId * sizeof(BoneData));
     }
 
     void NormalizeAngles(Vec3& a) {
@@ -251,10 +241,10 @@ namespace CombatShared {
         }
     }
 
-    static bool ReadPawnAliveRaw(uintptr_t controller, bool* out) {
+    static bool ReadPawnHandleRaw(uintptr_t controller, uint32_t* out) {
         if (!IsUserPtr(controller)) return false;
         __try {
-            *out = *reinterpret_cast<bool*>(controller + OffsetConfig::fields.m_bPawnIsAlive);
+            *out = *reinterpret_cast<uint32_t*>(controller + OffsetConfig::fields.m_hPlayerPawn);
             return true;
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -262,10 +252,21 @@ namespace CombatShared {
         }
     }
 
-    static bool ReadPawnHandleRaw(uintptr_t controller, uint32_t* out) {
-        if (!IsUserPtr(controller)) return false;
+    static bool SafeReadStringPtr(uintptr_t addr, uintptr_t* out) {
+        *out = 0;
         __try {
-            *out = *reinterpret_cast<uint32_t*>(controller + OffsetConfig::fields.m_hPawn);
+            *out = *reinterpret_cast<uintptr_t*>(addr);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    static bool SafeReadChar(uintptr_t addr, char* out) {
+        *out = '\0';
+        __try {
+            *out = *reinterpret_cast<const char*>(addr);
             return true;
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -276,22 +277,24 @@ namespace CombatShared {
     static bool ReadControllerNameRaw(uintptr_t controller, char* out, size_t outSize) {
         out[0] = '\0';
         if (!IsUserPtr(controller)) return false;
-        __try {
-            uintptr_t strPtr = *reinterpret_cast<uintptr_t*>(
-                controller + OffsetConfig::fields.m_sSanitizedPlayerName);
-            if (!IsUserPtr(strPtr)) return false;
-            const char* src = reinterpret_cast<const char*>(strPtr);
-            size_t i = 0;
-            while (i < outSize - 1 && src[i] != '\0') {
-                out[i] = src[i];
-                i++;
-            }
-            out[i] = '\0';
-            return true;
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER) {
+
+        const uintptr_t field = controller + OffsetConfig::fields.m_sSanitizedPlayerName;
+
+        uintptr_t strPtr = 0;
+        if (!SafeReadStringPtr(field, &strPtr) || !IsUserPtr(strPtr)) {
             return false;
         }
+
+        size_t i = 0;
+        while (i < outSize - 1 && i < 127) {
+            char c = '\0';
+            if (!SafeReadChar(strPtr + i, &c)) return false;
+            if (c == '\0') break;
+            out[i] = c;
+            i++;
+        }
+        out[i] = '\0';
+        return out[0] != '\0';
     }
 
     static bool ReadActiveWeaponHandleRaw(uintptr_t pawn, uint32_t* out) {
@@ -342,6 +345,7 @@ namespace CombatShared {
     struct ControllerRecord {
         uintptr_t entity;
         uintptr_t pawn;
+        char name[128];
     };
 
     static std::vector<Enemy> BuildEnemies() {
@@ -350,8 +354,6 @@ namespace CombatShared {
         uintptr_t localPawn = GetLocalPawn();
         if (!localPawn) return out;
 
-        const bool readName = (OffsetConfig::fields.m_sSanitizedPlayerName != 0 &&
-            OffsetConfig::fields.m_hPawn != 0);
         const bool readWeapon = (OffsetConfig::fields.m_pWeaponServices != 0 &&
             OffsetConfig::fields.m_hActiveWeapon != 0 &&
             OffsetConfig::fields.m_iClip1 != 0 &&
@@ -362,15 +364,13 @@ namespace CombatShared {
         ControllerRecord controllers[kMaxPlayers];
         int ctrlCount = 0;
 
-        for (int i = 0; i < kMaxEntityIndex; i++) {
+        for (int i = 0; i < kMaxEntityIndex && ctrlCount < kMaxPlayers; i++) {
             uintptr_t entity = GetEntityByIndex(i);
             if (!entity) continue;
 
             const char* schema = GetSchemaName(entity);
             if (!schema) continue;
-            if (strcmp(schema, "C_CSPlayerController") != 0 &&
-                strcmp(schema, "CCSPlayerController") != 0) continue;
-            if (ctrlCount >= kMaxPlayers) break;
+            if (strstr(schema, "PlayerController") == nullptr) continue;
 
             uint32_t pawnHandle = 0;
             if (!ReadPawnHandleRaw(entity, &pawnHandle)) continue;
@@ -381,6 +381,8 @@ namespace CombatShared {
 
             controllers[ctrlCount].entity = entity;
             controllers[ctrlCount].pawn = pawn;
+            controllers[ctrlCount].name[0] = '\0';
+            ReadControllerNameRaw(entity, controllers[ctrlCount].name, sizeof(controllers[ctrlCount].name));
             ctrlCount++;
         }
 
@@ -390,7 +392,7 @@ namespace CombatShared {
 
             const char* schema = GetSchemaName(entity);
             if (!schema) continue;
-            if (strcmp(schema, "C_CSPlayerPawn") != 0) continue;
+            if (strstr(schema, "CSPlayerPawn") == nullptr) continue;
             if (entity == localPawn) continue;
 
             int health = 0;
@@ -408,11 +410,8 @@ namespace CombatShared {
             for (int j = 0; j < ctrlCount; j++) {
                 if (controllers[j].pawn == entity) {
                     e.controller = controllers[j].entity;
-                    if (readName) {
-                        char nameBuf[128];
-                        if (ReadControllerNameRaw(controllers[j].entity, nameBuf, sizeof(nameBuf))) {
-                            e.name.assign(nameBuf);
-                        }
+                    if (controllers[j].name[0] != '\0') {
+                        e.name.assign(controllers[j].name);
                     }
                     break;
                 }
@@ -423,15 +422,29 @@ namespace CombatShared {
                 e.origin = Vec3(origin[0], origin[1], origin[2]);
             }
 
-            GetBonePosition(entity, 7, e.headPos);
-            GetBonePosition(entity, 6, e.neckPos);
-            GetBonePosition(entity, 3, e.chestPos);
-            GetBonePosition(entity, 2, e.stomachPos);
-            GetBonePosition(entity, 1, e.pelvisPos);
-            GetBonePosition(entity, 9, e.leftArmPos);
-            GetBonePosition(entity, 13, e.rightArmPos);
-            GetBonePosition(entity, 17, e.leftLegPos);
-            GetBonePosition(entity, 20, e.rightLegPos);
+            uintptr_t boneCache = 0;
+            int boneCount = 0;
+            if (GetBoneCache(entity, boneCache, boneCount)) {
+                const int readCount = (boneCount < kMaxBones) ? boneCount : kMaxBones;
+                for (int b = 0; b < readCount; b++) {
+                    if (!SafeReadBone(&e.bones[b], boneCache + b * sizeof(BoneData))) {
+                        e.bones[b] = Vec3();
+                    }
+                }
+                for (int b = readCount; b < kMaxBones; b++) {
+                    e.bones[b] = Vec3();
+                }
+            }
+
+            e.headPos = e.bones[7];
+            e.neckPos = e.bones[6];
+            e.chestPos = e.bones[3];
+            e.stomachPos = e.bones[2];
+            e.pelvisPos = e.bones[1];
+            e.leftArmPos = e.bones[9];
+            e.rightArmPos = e.bones[13];
+            e.leftLegPos = e.bones[17];
+            e.rightLegPos = e.bones[20];
 
             if (readWeapon) {
                 uint32_t weaponHandle = 0;

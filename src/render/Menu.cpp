@@ -290,6 +290,36 @@ namespace Menu {
         Widgets::EndCard();
     }
 
+    static void DrawSkeletonCard() {
+        bool enabled = Esp::IsSkeletonEnabled();
+        float color[4];
+        memcpy(color, Esp::GetSkeletonColor(), sizeof(color));
+        float thickness = Esp::GetSkeletonThickness();
+        bool debug = Esp::IsSkeletonDebug();
+
+        int rows = 2;
+        if (enabled) rows += 2;
+
+        Widgets::BeginCard("SKELETON", rows);
+
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            Esp::SetSkeletonEnabled(enabled);
+        }
+        if (Widgets::ColorPicker("Color", color)) {
+            Esp::SetSkeletonColor(color);
+        }
+        if (enabled) {
+            if (Widgets::SliderFloat("Thickness", &thickness, 0.5f, 5.0f, "%.1f")) {
+                Esp::SetSkeletonThickness(thickness);
+            }
+            if (Widgets::Toggle("Debug bones", &debug)) {
+                Esp::SetSkeletonDebug(debug);
+            }
+        }
+
+        Widgets::EndCard();
+    }
+
     static void DrawEspBoxCard() {
         bool boxEnabled = Esp::IsBoxEnabled();
         int boxStyle = Esp::GetBoxStyle();
@@ -351,6 +381,7 @@ namespace Menu {
         ImGui::BeginChild("##esp_col_left", ImVec2(colW, 0), false,
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
         DrawEspCard();
+        DrawSkeletonCard();
         ImGui::EndChild();
 
         ImGui::SameLine(0, gap);
@@ -518,6 +549,30 @@ namespace Menu {
         Widgets::EndCard();
     }
 
+    static void DrawFovCircleCard() {
+        bool enabled = Esp::IsFovCircleEnabled();
+        float color[4];
+        memcpy(color, Esp::GetFovCircleColor(), sizeof(color));
+        float fov = Aim::GetFov();
+
+        Widgets::BeginCard("FOV CIRCLE", 3);
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            Esp::SetFovCircleEnabled(enabled);
+        }
+        {
+            char fovText[32];
+            snprintf(fovText, sizeof(fovText), "%.1f (aim fov)", fov);
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + Style::RowInnerPad);
+            ImGui::PushStyleColor(ImGuiCol_Text, Style::TextMuted);
+            ImGui::TextUnformatted(fovText);
+            ImGui::PopStyleColor();
+        }
+        if (Widgets::ColorPicker("Color", color)) {
+            Esp::SetFovCircleColor(color);
+        }
+        Widgets::EndCard();
+    }
+
     static void DrawMiscTab() {
         float current[4] = { Style::Accent.x, Style::Accent.y, Style::Accent.z, 1.0f };
 
@@ -536,6 +591,8 @@ namespace Menu {
             Removals::SetFlashEnabled(flash);
         }
         Widgets::EndCard();
+
+        DrawFovCircleCard();
     }
 
     static void DrawConfigTab() {
@@ -698,7 +755,7 @@ namespace Menu {
             ImGui::PushStyleColor(ImGuiCol_Text, Style::Accent);
             ImGui::TextUnformatted("LAVENDER");
             ImGui::PopStyleColor();
-            ImGui::PopFont();   
+            ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 16));
 
             const char* titles[] = { "Legit",   "Visuals",        "World",          "Misc",          "Config" };

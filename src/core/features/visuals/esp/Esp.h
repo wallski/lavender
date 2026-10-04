@@ -78,4 +78,21 @@ namespace Esp {
     float* GetNameColor();
     void SetNameColor(const float color[4]);
 
+    bool IsSkeletonEnabled();
+    void SetSkeletonEnabled(bool enabled);
+
+    float* GetSkeletonColor();
+    void SetSkeletonColor(const float color[4]);
+
+    float GetSkeletonThickness();
+    void SetSkeletonThickness(float thickness);
+
+    bool IsSkeletonDebug();
+    void SetSkeletonDebug(bool enabled);
+
+    bool IsFovCircleEnabled();
+    void SetFovCircleEnabled(bool enabled);
+
+    float* GetFovCircleColor();
+    void SetFovCircleColor(const float color[4]);
 }

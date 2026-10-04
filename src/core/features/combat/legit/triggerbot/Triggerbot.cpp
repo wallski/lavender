@@ -458,11 +458,11 @@ namespace Triggerbot {
     }
 
     static bool CheckEnemy(const CombatShared::Enemy& e, uint32_t hb, float cx, float cy) {
-        constexpr float rHead = 20.0f;
-        constexpr float rChest = 35.0f;
-        constexpr float rStomach = 28.0f;
-        constexpr float rPelvis = 26.0f;
-        constexpr float rLimb = 22.0f;
+        constexpr float rHead = 8.0f;
+        constexpr float rChest = 14.0f;
+        constexpr float rStomach = 12.0f;
+        constexpr float rPelvis = 12.0f;
+        constexpr float rLimb = 10.0f;
 
         if ((hb & HB_HEAD) && CheckBone(e.headPos, cx, cy, rHead)) return true;
         if ((hb & HB_NECK) && CheckBone(e.neckPos, cx, cy, rHead)) return true;
