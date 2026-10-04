@@ -6,9 +6,6 @@
 
 namespace CombatShared {
 
-    static uintptr_t g_traceRayFn = 0;
-    static uintptr_t g_traceFilterInitFn = 0;
-
     static std::vector<Enemy> g_enemyCache;
     static volatile LONG g_frameId = 0;
     static volatile LONG g_cacheFrame = -1;
@@ -33,30 +30,64 @@ namespace CombatShared {
         }
     }
 
+    static bool SafeReadU8(uintptr_t addr, uint8_t* out) {
+        *out = 0;
+        __try {
+            *out = *reinterpret_cast<uint8_t*>(addr);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    static bool SafeReadU64(uintptr_t addr, uint64_t* out) {
+        *out = 0;
+        __try {
+            *out = *reinterpret_cast<uint64_t*>(addr);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
+    static bool SafeReadI32(uintptr_t addr, int32_t* out) {
+        *out = 0;
+        __try {
+            *out = *reinterpret_cast<int32_t*>(addr);
+            return true;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
     static uintptr_t ReadPtr(uintptr_t addr) {
-        __try { return *(uintptr_t*)addr; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+        uint64_t v = 0;
+        SafeReadU64(addr, &v);
+        return static_cast<uintptr_t>(v);
     }
 
     static int ReadInt(uintptr_t addr) {
-        __try { return *(int*)addr; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+        int32_t v = 0;
+        SafeReadI32(addr, &v);
+        return static_cast<int>(v);
     }
 
     static bool ReadBool(uintptr_t addr) {
-        __try { return *(bool*)addr; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+        uint8_t v = 0;
+        SafeReadU8(addr, &v);
+        return v != 0;
     }
 
     static Vec3 ReadVec3(uintptr_t addr) {
-        __try { return *(Vec3*)addr; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return Vec3(); }
+        Vec3 v;
+        SafeReadBone(&v, addr);
+        return v;
     }
 
-    void Initialize() {
-        g_traceFilterInitFn = Memory::FindPattern("client.dll",
-            "48 89 5C 24 ?? 48 89 74 24 ?? 57 48 83 EC ?? 0F B6 41 ?? 33 FF 24");
-    }
+    void Initialize() {}
 
     void Shutdown() {}
 

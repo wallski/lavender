@@ -46,6 +46,16 @@ namespace Materials {
     g_tNormal = resource:"materials/default/default_normal_tga_7652cb.vtex"
 })KV";
 
+    static const char* kMatteIgnoreZKV = R"KV(<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
+{
+    shader = "generic.vfx"
+    F_DISABLE_Z_BUFFERING = 1
+    F_DISABLE_Z_WRITE = 1
+    g_vColorTint = [1.0, 1.0, 1.0, 1.0]
+    g_tColor = resource:"materials/dev/primary_white_color_tga_21186c76.vtex"
+    g_tNormal = resource:"materials/default/default_normal_tga_7652cb.vtex"
+})KV";
+
     static const char* kFlatKV = R"KV(<!-- kv3 encoding:text:version{e21c7f3c-8a33-41c5-9977-a76d3a32aa0d} format:generic:version{7412167c-06e9-4698-aff2-e63eb59037e7} -->
 {
     shader = "csgo_unlitgeneric.vfx"
@@ -186,7 +196,7 @@ namespace Materials {
         case Id::Glow:            return kGlowKV;
         case Id::Outlines:        return kOutlinesKV;
         case Id::Bloom:           return kBloomKV;
-        case Id::MatteIgnoreZ:    return kFlatIgnoreZKV;
+        case Id::MatteIgnoreZ:    return kMatteIgnoreZKV;
         case Id::FlatIgnoreZ:     return kFlatIgnoreZKV;
         case Id::GlowIgnoreZ:     return kGlowIgnoreZKV;
         case Id::OutlinesIgnoreZ: return kOutlinesIgnoreZKV;
