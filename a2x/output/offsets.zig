@@ -1,5 +1,5 @@
 // Generated using https://github.com/a2x/cs2-dumper
-// 2026-10-04 20:33:11.431174300 UTC
+// 2026-10-04 21:31:30.090173700 UTC
 
 pub const cs2_dumper = struct {
     pub const offsets = struct {

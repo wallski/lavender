@@ -9,26 +9,39 @@
 #include "../features/combat/legit/aim/Aim.h"
 #include "../../render/Renderer.h"
 #include "../../render/Style.h"
+#include <ShlObj.h>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+
+#pragma comment(lib, "shell32.lib")
 
 namespace ConfigManager {
 
     static std::string g_directory;
     static std::string g_currentName = "default";
 
-    static std::string GetDllDirectory() {
-        HMODULE hm = NULL;
-        GetModuleHandleExA(
-            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-            (LPCSTR)&GetDllDirectory, &hm);
-        char path[MAX_PATH] = { 0 };
-        GetModuleFileNameA(hm, path, MAX_PATH);
-        std::string s(path);
-        size_t pos = s.find_last_of("\\/");
-        return (pos == std::string::npos) ? s : s.substr(0, pos);
+    static std::string GetDocumentsPath() {
+        PWSTR widePath = nullptr;
+        HRESULT hr = SHGetKnownFolderPath(FOLDERID_Documents, KF_FLAG_DEFAULT, nullptr, &widePath);
+
+        if (SUCCEEDED(hr) && widePath) {
+            char narrow[MAX_PATH] = {};
+            WideCharToMultiByte(CP_UTF8, 0, widePath, -1, narrow, MAX_PATH, nullptr, nullptr);
+            CoTaskMemFree(widePath);
+            if (narrow[0] != '\0') {
+                return std::string(narrow);
+            }
+        }
+
+        char userProfile[MAX_PATH] = {};
+        DWORD len = GetEnvironmentVariableA("USERPROFILE", userProfile, MAX_PATH);
+        if (len > 0 && len < MAX_PATH) {
+            return std::string(userProfile) + "\\Documents";
+        }
+
+        return ".";
     }
 
     static std::string PathFor(const std::string& name) {
@@ -50,9 +63,12 @@ namespace ConfigManager {
     }
 
     bool Initialize() {
-        g_directory = GetDllDirectory() + "\\configs";
+        const std::string docs = GetDocumentsPath();
+        g_directory = docs + "\\lavender\\configs";
+
         std::error_code ec;
         std::filesystem::create_directories(g_directory, ec);
+
         return true;
     }
 
