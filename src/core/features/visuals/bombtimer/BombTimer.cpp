@@ -146,6 +146,9 @@ namespace BombTimer {
         if (g_enabled == 0) return;
         if (g_c4GlobalAddr == 0) return;
 
+        uintptr_t localPawn = CombatShared::GetLocalPawn();
+        if (!localPawn) return;
+
         uintptr_t c4Entity = 0;
         if (!SafeReadPtr(g_c4GlobalAddr, &c4Entity)) return;
         if (c4Entity < 0x10000) return;
@@ -215,6 +218,9 @@ namespace BombTimer {
     void Render() {
         if (g_enabled == 0) return;
         if (!g_state.valid) return;
+
+        uintptr_t localPawn = CombatShared::GetLocalPawn();
+        if (!localPawn) return;
 
         Vec3 screen;
         if (!CombatShared::WorldToScreen(g_state.worldPos, screen)) return;
