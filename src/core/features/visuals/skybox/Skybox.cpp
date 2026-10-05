@@ -45,6 +45,16 @@ namespace Skybox {
     static uint8_t* g_fsn_stub = nullptr;
     static uint8_t g_fsn_original[5] = { 0 };
 
+    static uintptr_t SafeReadLocalPawn() {
+        uintptr_t global = OffsetConfig::globals.dwLocalPlayerPawn;
+        if (!global) return 0;
+        uintptr_t pawn = 0;
+        __try { pawn = *reinterpret_cast<uintptr_t*>(global); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+        if (pawn < 0x10000) return 0;
+        return pawn;
+    }
+
     static uint32_t HashPath(const char* s) {
         uint32_t h = 2166136261u;
         while (*s) {
@@ -400,6 +410,8 @@ namespace Skybox {
     void OnSkyboxDraw(void* mesh_array, uint32_t count) {
         if (g_materials_ready == 0) return;
         if (!mesh_array || count == 0) return;
+
+        if (SafeReadLocalPawn() == 0) return;
 
         uintptr_t base = (uintptr_t)mesh_array;
         uintptr_t slot = base + (uintptr_t)count * 0x70 - 0x58;

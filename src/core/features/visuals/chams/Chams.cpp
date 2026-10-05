@@ -116,14 +116,15 @@ namespace Chams {
         if (arr < 0x10000) return;
         if (count > 65536) count = 65536;
 
+        uintptr_t localPawn = __TryReadPtr(g_localPawnGlobal);
+        if (!localPawn || localPawn < 0x10000) return;
+
         const Materials::Id resolved = ResolveMaterial();
         const uintptr_t material = Materials::Get(resolved);
         const uint32_t packed = PackColor(g_color);
 
-        uintptr_t localPawn = __TryReadPtr(g_localPawnGlobal);
-
         int localTeam = 0;
-        if (g_teamCheck != 0 && localPawn) {
+        if (g_teamCheck != 0) {
             localTeam = __TryReadInt(localPawn + OffsetConfig::fields.m_iTeamNum);
         }
 
