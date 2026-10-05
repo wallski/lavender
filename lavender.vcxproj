@@ -187,6 +187,7 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\core\features\visuals\bombtimer\BombTimer.cpp" />
     <ClCompile Include="src\config\OffsetConfig.cpp" />
     <ClCompile Include="src\core\config\ConfigManager.cpp" />
     <ClCompile Include="src\core\cvar\CVar.cpp" />
@@ -269,6 +270,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\core\features\visuals\bombtimer\BombTimer.h" />
     <ClInclude Include="src\config\OffsetConfig.h" />
     <ClInclude Include="src\core\config\ConfigManager.h" />
     <ClInclude Include="src\config\GeneratedOffsets.h" />

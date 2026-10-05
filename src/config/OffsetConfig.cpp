@@ -8,6 +8,20 @@ namespace OffsetConfig {
     Fields  fields;
     bool    loaded = false;
 
+    static bool IsReadableRange(uintptr_t addr, size_t size) {
+        if (addr < 0x10000) return false;
+        uintptr_t end = addr + size;
+        uintptr_t cur = addr;
+        while (cur < end) {
+            MEMORY_BASIC_INFORMATION mbi;
+            if (VirtualQuery((LPCVOID)cur, &mbi, sizeof(mbi)) == 0) return false;
+            if (mbi.State != MEM_COMMIT) return false;
+            if (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) return false;
+            cur = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+        }
+        return true;
+    }
+
     bool Load() {
         globals.dwEntityList = GeneratedOffsets::Globals::dwEntityList;
         globals.dwLocalPlayerController = GeneratedOffsets::Globals::dwLocalPlayerController;
@@ -98,7 +112,30 @@ namespace OffsetConfig {
         globals.dwGameRules += clientBase;
         globals.dwCSGOInput += clientBase;
         globals.dwViewAngles += clientBase;
-        globals.dwGlobalVars += engineBase;
+
+        // dwGlobalVars: ambiguous module in CS2 builds. Try engine first, fall back to client.
+        {
+            uintptr_t rva = globals.dwGlobalVars;
+            uintptr_t engineCandidate = rva + engineBase;
+            uintptr_t clientCandidate = rva + clientBase;
+
+            if (IsReadableRange(engineCandidate, sizeof(uintptr_t))) {
+                globals.dwGlobalVars = engineCandidate;
+                printf("[OffsetConfig] dwGlobalVars: engine base OK (0x%llX)\n",
+                    (unsigned long long)engineCandidate);
+            }
+            else if (IsReadableRange(clientCandidate, sizeof(uintptr_t))) {
+                globals.dwGlobalVars = clientCandidate;
+                printf("[OffsetConfig] dwGlobalVars: client base OK (0x%llX)\n",
+                    (unsigned long long)clientCandidate);
+            }
+            else {
+                globals.dwGlobalVars = engineCandidate;
+                printf("[OffsetConfig] dwGlobalVars: NEITHER candidate readable, keeping engine\n");
+            }
+            fflush(stdout);
+        }
+
         globals.dwInputSystem += inputBase;
 
         if (!globals.dwInputSystem) {

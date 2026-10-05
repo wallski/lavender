@@ -85,13 +85,8 @@ $globalNames = @(
     "dwGameRules",
     "dwInputSystem",
     "dwCSGOInput",
-    "dwViewAngles",
-    "dwPrediction"
+    "dwViewAngles"
 )
-
-$globalFallbacks = @{
-    "dwPrediction" = 0x25605E0
-}
 
 $fieldNames = @(
     "m_iHealth",
@@ -134,20 +129,15 @@ $specialFields = @{
     "m_sSanitizedPlayerName" = @{ Namespace = "CCSPlayerController"; Name = "m_sSanitizedPlayerName" }
 }
 
-$nestedFields = @(
-    @{ Namespace = "C_BasePlayerPawn";           Name = "m_pMovementServices";           Output = "m_pMovementServices" },
-    @{ Namespace = "CPlayer_MovementServices";   Name = "m_nLastCommandNumberProcessed"; Output = "m_nLastCommandNumberProcessed" },
-    @{ Namespace = "CPlayer_MovementServices";   Name = "m_flStamina";                   Output = "m_flStamina" },
-    @{ Namespace = "CPlayer_MovementServices";   Name = "m_flMaxspeed";                  Output = "m_flMaxspeed" },
-    @{ Namespace = "CPlayer_MovementServices";   Name = "m_flCmdForwardMove";            Output = "m_flCmdForwardMove" },
-    @{ Namespace = "CPlayer_MovementServices";   Name = "m_flCmdLeftMove";               Output = "m_flCmdLeftMove" },
-    @{ Namespace = "CPlayer_MovementServices_Humanoid"; Name = "m_flFallVelocity";       Output = "m_flFallVelocity" },
-    @{ Namespace = "CPlayer_MovementServices_Humanoid"; Name = "m_flSurfaceFriction";    Output = "m_flSurfaceFriction" },
-    @{ Namespace = "CCSPlayer_MovementServices"; Name = "m_flDuckAmount";                Output = "m_flDuckAmount" },
-    @{ Namespace = "CCSPlayer_MovementServices"; Name = "m_ModernJump";                  Output = "m_ModernJump" },
-    @{ Namespace = "CCSPlayerModernJump";        Name = "m_nLastLandedTick";             Output = "m_nLastLandedTick" },
-    @{ Namespace = "CCSPlayerModernJump";        Name = "m_flLastLandedFrac";            Output = "m_flLastLandedFrac" },
-    @{ Namespace = "CCSPlayerModernJump";        Name = "m_flLastLandedVelocityZ";       Output = "m_flLastLandedVelocityZ" }
+$c4Fields = @(
+    "m_bBombTicking",
+    "m_nBombSite",
+    "m_flC4Blow",
+    "m_bHasExploded",
+    "m_bBeingDefused",
+    "m_flDefuseLength",
+    "m_flDefuseCountDown",
+    "m_bBombDefused"
 )
 
 $lines = New-Object System.Collections.Generic.List[string]
@@ -169,16 +159,9 @@ foreach ($name in $globalNames) {
         }
     }
     if ($null -eq $found) {
-        if ($globalFallbacks.ContainsKey($name)) {
-            $hex = "0x{0:X}" -f $globalFallbacks[$name]
-            $lines.Add("        constexpr uintptr_t $name = $hex;")
-            Write-Host "[gen-offsets] INFO: global '$name' not in a2x, using fallback $hex" -ForegroundColor Cyan
-        }
-        else {
-            $lines.Add("        constexpr uintptr_t $name = 0;")
-            Write-Host "[gen-offsets] WARN: global '$name' not found" -ForegroundColor Yellow
-            $missingGlobals++
-        }
+        $lines.Add("        constexpr uintptr_t $name = 0;")
+        Write-Host "[gen-offsets] WARN: global '$name' not found" -ForegroundColor Yellow
+        $missingGlobals++
     }
     else {
         $hex = "0x{0:X}" -f $found
@@ -221,18 +204,18 @@ foreach ($name in $fieldNames) {
 
 $lines.Add("    }")
 $lines.Add("")
-$lines.Add("    namespace Movement {")
+$lines.Add("    namespace C4 {")
 
-$missingNested = 0
-foreach ($n in $nestedFields) {
-    $hexVal = Get-NamespacedConstant -Hpp $hpp -Namespace $n.Namespace -Name $n.Name
+$missingC4 = 0
+foreach ($name in $c4Fields) {
+    $hexVal = Get-NamespacedConstant -Hpp $hpp -Namespace "C_PlantedC4" -Name $name
     if ($hexVal) {
-        $lines.Add("        constexpr uint32_t $($n.Output) = $hexVal;")
+        $lines.Add("        constexpr uint32_t $name = $hexVal;")
     }
     else {
-        $lines.Add("        constexpr uint32_t $($n.Output) = 0;")
-        Write-Host "[gen-offsets] WARN: nested field '$($n.Namespace)::$($n.Name)' not found" -ForegroundColor Yellow
-        $missingNested++
+        $lines.Add("        constexpr uint32_t $name = 0;")
+        Write-Host "[gen-offsets] WARN: C4 field '$name' not found" -ForegroundColor Yellow
+        $missingC4++
     }
 }
 
@@ -243,7 +226,7 @@ $lines.Add("}")
 $content = $lines -join "`r`n"
 Set-Content -Path $OutputFile -Value $content -Encoding ASCII
 
-Write-Host "[gen-offsets] Wrote $OutputFile (globals: $($globalNames.Count - $missingGlobals)/$($globalNames.Count), fields: $($fieldNames.Count - $missingFields)/$($fieldNames.Count), movement: $($nestedFields.Count - $missingNested)/$($nestedFields.Count))" -ForegroundColor Green
+Write-Host "[gen-offsets] Wrote $OutputFile (globals: $($globalNames.Count - $missingGlobals)/$($globalNames.Count), fields: $($fieldNames.Count - $missingFields)/$($fieldNames.Count), C4: $($c4Fields.Count - $missingC4)/$($c4Fields.Count))" -ForegroundColor Green
 
 if ($missingGlobals -gt 0 -or $missingFields -gt 0) {
     exit 1

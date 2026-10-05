@@ -13,6 +13,8 @@
 #include "../core/features/combat/legit/aim/Aim.h"
 #include "../config/OffsetConfig.h"
 
+#include "../core/features/visuals/bombtimer/BombTimer.h"
+
 LRESULT WINAPI ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 namespace Renderer {
@@ -218,6 +220,7 @@ namespace Renderer {
         UpdateMouseState();
         CombatShared::BeginFrame();
         Removals::Update();
+        BombTimer::Update();
         Triggerbot::Tick();
         Aim::Tick();
 
@@ -228,6 +231,7 @@ namespace Renderer {
         ImGui::NewFrame();
 
         Esp::Render();
+        BombTimer::Render();
 
         float targetAlpha = (g_menuOpen && !g_unloadRequested) ? 1.0f : 0.0f;
         float dt = ImGui::GetIO().DeltaTime;

@@ -13,7 +13,6 @@ namespace GeneratedOffsets {
         constexpr uintptr_t dwInputSystem = 0x46BC0;
         constexpr uintptr_t dwCSGOInput = 0x2576150;
         constexpr uintptr_t dwViewAngles = 0x25767D8;
-        constexpr uintptr_t dwPrediction = 0x25605A0;
     }
 
     namespace Fields {
@@ -51,20 +50,15 @@ namespace GeneratedOffsets {
         constexpr uint32_t m_flFlashDuration = 0x1510;
     }
 
-    namespace Movement {
-        constexpr uint32_t m_pMovementServices = 0x1330;
-        constexpr uint32_t m_nLastCommandNumberProcessed = 0x188;
-        constexpr uint32_t m_flStamina = 0;
-        constexpr uint32_t m_flMaxspeed = 0x1AC;
-        constexpr uint32_t m_flCmdForwardMove = 0x1A0;
-        constexpr uint32_t m_flCmdLeftMove = 0x1A4;
-        constexpr uint32_t m_flFallVelocity = 0x25C;
-        constexpr uint32_t m_flSurfaceFriction = 0x26C;
-        constexpr uint32_t m_flDuckAmount = 0x40C;
-        constexpr uint32_t m_ModernJump = 0x6C8;
-        constexpr uint32_t m_nLastLandedTick = 0x20;
-        constexpr uint32_t m_flLastLandedFrac = 0x24;
-        constexpr uint32_t m_flLastLandedVelocityZ = 0x30;
+    namespace C4 {
+        constexpr uint32_t m_bBombTicking = 0x1288;
+        constexpr uint32_t m_nBombSite = 0x128C;
+        constexpr uint32_t m_flC4Blow = 0x12B8;
+        constexpr uint32_t m_bHasExploded = 0x12BD;
+        constexpr uint32_t m_bBeingDefused = 0x12C4;
+        constexpr uint32_t m_flDefuseLength = 0x12D4;
+        constexpr uint32_t m_flDefuseCountDown = 0x12D8;
+        constexpr uint32_t m_bBombDefused = 0x12DC;
     }
 
 }

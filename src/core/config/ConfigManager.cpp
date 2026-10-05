@@ -5,6 +5,7 @@
 #include "../features/visuals/esp/Esp.h"
 #include "../features/visuals/removals/Removals.h"
 #include "../features/visuals/skybox/Skybox.h"
+#include "../features/visuals/bombtimer/BombTimer.h"
 #include "../features/combat/legit/triggerbot/Triggerbot.h"
 #include "../features/combat/legit/aim/Aim.h"
 #include "../../render/Renderer.h"
@@ -184,6 +185,22 @@ namespace ConfigManager {
         f << "esp.fov_circle_color_a=" << fcc[3] << "\n";
 
         f << "removals.flash=" << (Removals::IsFlashEnabled() ? 1 : 0) << "\n";
+        f << "removals.smoke=" << (Removals::IsSmokeEnabled() ? 1 : 0) << "\n";
+
+        f << "bombtimer.enabled=" << (BombTimer::IsEnabled() ? 1 : 0) << "\n";
+        f << "bombtimer.defuse=" << (BombTimer::IsDefuseEnabled() ? 1 : 0) << "\n";
+        f << "bombtimer.site=" << (BombTimer::IsSiteEnabled() ? 1 : 0) << "\n";
+        f << "bombtimer.scale=" << BombTimer::GetScale() << "\n";
+        const float* btc = BombTimer::GetColor();
+        f << "bombtimer.color_r=" << btc[0] << "\n";
+        f << "bombtimer.color_g=" << btc[1] << "\n";
+        f << "bombtimer.color_b=" << btc[2] << "\n";
+        f << "bombtimer.color_a=" << btc[3] << "\n";
+        const float* btdc = BombTimer::GetDefuseColor();
+        f << "bombtimer.defuse_color_r=" << btdc[0] << "\n";
+        f << "bombtimer.defuse_color_g=" << btdc[1] << "\n";
+        f << "bombtimer.defuse_color_b=" << btdc[2] << "\n";
+        f << "bombtimer.defuse_color_a=" << btdc[3] << "\n";
 
         f << "world.skybox_enabled=" << (Skybox::IsEnabled() ? 1 : 0) << "\n";
         f << "world.skybox_index=" << Skybox::GetSelectedIndex() << "\n";
@@ -207,9 +224,6 @@ namespace ConfigManager {
         f << "menu.accent_r=" << Style::Accent.x << "\n";
         f << "menu.accent_g=" << Style::Accent.y << "\n";
         f << "menu.accent_b=" << Style::Accent.z << "\n";
-
-        f << "removals.flash=" << (Removals::IsFlashEnabled() ? 1 : 0) << "\n";
-        f << "removals.smoke=" << (Removals::IsSmokeEnabled() ? 1 : 0) << "\n";
 
         g_currentName = name;
         return true;
@@ -264,8 +278,17 @@ namespace ConfigManager {
 
         bool removalsFlash = false;
         bool removalsSmoke = false;
+
+        bool bombTimerEnabled = false;
+        bool bombTimerDefuse = true;
+        bool bombTimerSite = true;
+        float bombTimerScale = 1.0f;
+        float bombTimerColor[4] = { 1.0f, 0.25f, 0.25f, 1.0f };
+        float bombTimerDefuseColor[4] = { 0.25f, 0.85f, 0.35f, 1.0f };
+
         bool skyboxEnabled = false;
         int skyboxIndex = 0;
+
         bool triggerEnabled = false;
         int triggerKey = VK_XBUTTON2;
         bool triggerTeamCheck = true;
@@ -373,8 +396,23 @@ namespace ConfigManager {
 
             else if (key == "removals.flash") removalsFlash = ParseBool(val);
             else if (key == "removals.smoke") removalsSmoke = ParseBool(val);
+
+            else if (key == "bombtimer.enabled") bombTimerEnabled = ParseBool(val);
+            else if (key == "bombtimer.defuse") bombTimerDefuse = ParseBool(val);
+            else if (key == "bombtimer.site") bombTimerSite = ParseBool(val);
+            else if (key == "bombtimer.scale") bombTimerScale = ParseFloat(val, bombTimerScale);
+            else if (key == "bombtimer.color_r") bombTimerColor[0] = ParseFloat(val, bombTimerColor[0]);
+            else if (key == "bombtimer.color_g") bombTimerColor[1] = ParseFloat(val, bombTimerColor[1]);
+            else if (key == "bombtimer.color_b") bombTimerColor[2] = ParseFloat(val, bombTimerColor[2]);
+            else if (key == "bombtimer.color_a") bombTimerColor[3] = ParseFloat(val, bombTimerColor[3]);
+            else if (key == "bombtimer.defuse_color_r") bombTimerDefuseColor[0] = ParseFloat(val, bombTimerDefuseColor[0]);
+            else if (key == "bombtimer.defuse_color_g") bombTimerDefuseColor[1] = ParseFloat(val, bombTimerDefuseColor[1]);
+            else if (key == "bombtimer.defuse_color_b") bombTimerDefuseColor[2] = ParseFloat(val, bombTimerDefuseColor[2]);
+            else if (key == "bombtimer.defuse_color_a") bombTimerDefuseColor[3] = ParseFloat(val, bombTimerDefuseColor[3]);
+
             else if (key == "world.skybox_enabled") skyboxEnabled = ParseBool(val);
             else if (key == "world.skybox_index") skyboxIndex = ParseInt(val, skyboxIndex);
+
             else if (key == "trigger.enabled") triggerEnabled = ParseBool(val);
             else if (key == "trigger.key") triggerKey = ParseInt(val, triggerKey);
             else if (key == "trigger.team_check") triggerTeamCheck = ParseBool(val);
@@ -441,8 +479,17 @@ namespace ConfigManager {
 
         Removals::SetFlashEnabled(removalsFlash);
         Removals::SetSmokeEnabled(removalsSmoke);
+
+        BombTimer::SetEnabled(bombTimerEnabled);
+        BombTimer::SetDefuseEnabled(bombTimerDefuse);
+        BombTimer::SetSiteEnabled(bombTimerSite);
+        BombTimer::SetScale(bombTimerScale);
+        BombTimer::SetColor(bombTimerColor);
+        BombTimer::SetDefuseColor(bombTimerDefuseColor);
+
         Skybox::SetEnabled(skyboxEnabled);
         Skybox::SetSelectedIndex(skyboxIndex);
+
         Triggerbot::SetEnabled(triggerEnabled);
         Triggerbot::SetKey(triggerKey);
         Triggerbot::SetTeamCheck(triggerTeamCheck);

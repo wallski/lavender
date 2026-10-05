@@ -16,6 +16,7 @@
 #include "core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "core/features/combat/legit/aim/Aim.h"
 #include "render/Renderer.h"
+#include "core/features/visuals/bombtimer/BombTimer.h"
 #include <thread>
 #include <cstdarg>
 
@@ -179,6 +180,8 @@ void MainThread(HMODULE hModule) {
     CombatShared::Initialize();
 
     Removals::Initialize();
+    BombTimer::Initialize();
+
 
     InputHelper::Initialize();
     CreateMoveHook::Initialize();
@@ -212,6 +215,7 @@ void MainThread(HMODULE hModule) {
     CreateMoveHook::Shutdown();
     InputHelper::Shutdown();
     Removals::Shutdown();
+    BombTimer::Shutdown();
     RestoreSortHook();
     CombatShared::Shutdown();
     CVar::Shutdown();

@@ -108,6 +108,9 @@
     <ClCompile Include="src\core\hooks\CreateMoveHook.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\features\visuals\bombtimer\BombTimer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\memory\PatternScan.h">
@@ -216,6 +219,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\hooks\CreateMoveHook.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\features\visuals\bombtimer\BombTimer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

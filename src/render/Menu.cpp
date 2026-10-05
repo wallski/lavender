@@ -9,6 +9,7 @@
 #include "../core/features/visuals/esp/Esp.h"
 #include "../core/features/visuals/removals/Removals.h"
 #include "../core/features/visuals/skybox/Skybox.h"
+#include "../core/features/visuals/bombtimer/BombTimer.h"
 #include "../core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "../core/features/combat/legit/aim/Aim.h"
 #include "../core/config/ConfigManager.h"
@@ -573,7 +574,53 @@ namespace Menu {
         Widgets::EndCard();
     }
 
+    static void DrawBombTimerCard() {
+        bool enabled = BombTimer::IsEnabled();
+        bool defuse = BombTimer::IsDefuseEnabled();
+        bool site = BombTimer::IsSiteEnabled();
+        float scale = BombTimer::GetScale();
+        float color[4];
+        float defuseColor[4];
+        memcpy(color, BombTimer::GetColor(), sizeof(color));
+        memcpy(defuseColor, BombTimer::GetDefuseColor(), sizeof(defuseColor));
+
+        int rows = 5;
+        if (defuse) rows += 1;
+
+        Widgets::BeginCard("BOMB TIMER", rows);
+
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            BombTimer::SetEnabled(enabled);
+        }
+        if (Widgets::Toggle("Defuse timer", &defuse)) {
+            BombTimer::SetDefuseEnabled(defuse);
+        }
+        if (Widgets::Toggle("Show site", &site)) {
+            BombTimer::SetSiteEnabled(site);
+        }
+        if (Widgets::SliderFloat("Text size", &scale, 0.5f, 3.0f, "%.2f")) {
+            BombTimer::SetScale(scale);
+        }
+        if (Widgets::ColorPicker("Color", color)) {
+            BombTimer::SetColor(color);
+        }
+        if (defuse) {
+            if (Widgets::ColorPicker("Defuse color", defuseColor)) {
+                BombTimer::SetDefuseColor(defuseColor);
+            }
+        }
+
+        Widgets::EndCard();
+    }
+
     static void DrawMiscTab() {
+        const float totalW = ImGui::GetContentRegionAvail().x;
+        const float gap = 10.0f;
+        const float colW = (totalW - gap) * 0.5f;
+
+        ImGui::BeginChild("##misc_col_left", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
         float current[4] = { Style::Accent.x, Style::Accent.y, Style::Accent.z, 1.0f };
 
         Widgets::BeginCard("MENU", 2);
@@ -596,7 +643,17 @@ namespace Menu {
         }
         Widgets::EndCard();
 
+        ImGui::EndChild();
+
+        ImGui::SameLine(0, gap);
+
+        ImGui::BeginChild("##misc_col_right", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+
+        DrawBombTimerCard();
         DrawFovCircleCard();
+
+        ImGui::EndChild();
     }
 
     static void DrawConfigTab() {
