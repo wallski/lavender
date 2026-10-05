@@ -28,6 +28,7 @@ namespace Renderer {
     static float                   g_alpha = 0.0f;
     static bool                    g_unloadRequested = false;
     static bool                    g_readyToUnload = false;
+    static int                     g_skipFrames = 0;
 
     static bool g_firstFrame = true;
     static bool g_prevMenuOpen = true;
@@ -144,7 +145,19 @@ namespace Renderer {
         }
     }
 
+    static bool IsDeviceAlive() {
+        if (!g_device) return false;
+        __try {
+            return g_device->GetDeviceRemovedReason() == S_OK;
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {
+            return false;
+        }
+    }
+
     static void CreateRenderTarget() {
+        if (!g_swapChain || !g_device) return;
+
         ID3D11Texture2D* backBuffer = nullptr;
         HRESULT hr = g_swapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&backBuffer);
         if (SUCCEEDED(hr) && backBuffer) {
@@ -196,6 +209,8 @@ namespace Renderer {
 
     void RenderFrame() {
         if (!g_initialized) return;
+        if (!g_device || !g_context) return;
+        if (!IsDeviceAlive()) return;
 
         if (GetAsyncKeyState(Menu::GetMenuKey()) & 1) {
             g_menuOpen = !g_menuOpen;
@@ -206,6 +221,13 @@ namespace Renderer {
         Removals::Update();
         Triggerbot::Tick();
         Aim::Tick();
+
+        if (g_skipFrames > 0) {
+            g_skipFrames--;
+            return;
+        }
+
+        if (!g_renderTarget) return;
 
         ImGui_ImplDX11_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -227,6 +249,7 @@ namespace Renderer {
         }
 
         ImGui::Render();
+
         g_context->OMSetRenderTargets(1, &g_renderTarget, nullptr);
         ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
     }
@@ -259,4 +282,18 @@ namespace Renderer {
     bool ShouldUnload() { return g_readyToUnload; }
     int  GetMenuKey() { return Menu::GetMenuKey(); }
     void SetMenuKey(int key) { Menu::SetMenuKey(key); }
+
+    void OnPreResize() {
+        ImGui_ImplDX11_InvalidateDeviceObjects();
+        DestroyRenderTarget();
+    }
+
+    void OnPostResize() {
+        if (!IsDeviceAlive()) return;
+        CreateRenderTarget();
+        if (g_renderTarget) {
+            ImGui_ImplDX11_CreateDeviceObjects();
+            g_skipFrames = 3;
+        }
+    }
 }

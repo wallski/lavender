@@ -10,9 +10,11 @@ namespace PresentHook {
 
     using PresentFn = HRESULT(__stdcall*)(IDXGISwapChain*, UINT, UINT);
     using Present1Fn = HRESULT(__stdcall*)(IDXGISwapChain1*, UINT, UINT, const DXGI_PRESENT_PARAMETERS*);
+    using ResizeBuffersFn = HRESULT(__stdcall*)(IDXGISwapChain*, UINT, UINT, UINT, DXGI_FORMAT, UINT);
 
     static PresentFn  o_Present = nullptr;
     static Present1Fn o_Present1 = nullptr;
+    static ResizeBuffersFn o_ResizeBuffers = nullptr;
 
     static volatile LONG g_presentCount = 0;
     static volatile LONG g_present1Count = 0;
@@ -37,6 +39,14 @@ namespace PresentHook {
     HRESULT __stdcall hkPresent1(IDXGISwapChain1* sc, UINT si, UINT fl, const DXGI_PRESENT_PARAMETERS* pp) {
         InterlockedIncrement(&g_present1Count);
         return o_Present1(sc, si, fl, pp);
+    }
+
+    HRESULT __stdcall hkResizeBuffers(IDXGISwapChain* sc, UINT bufferCount, UINT width, UINT height,
+        DXGI_FORMAT newFormat, UINT swapChainFlags) {
+        Renderer::OnPreResize();
+        HRESULT hr = o_ResizeBuffers(sc, bufferCount, width, height, newFormat, swapChainFlags);
+        Renderer::OnPostResize();
+        return hr;
     }
 
     static bool LooksLikeRealSwapchain(void* candidate, void** expectedVtable) {
@@ -165,6 +175,7 @@ namespace PresentHook {
 
         void** dummyVtable = *reinterpret_cast<void***>(dummy);
         o_Present = (PresentFn)dummyVtable[8];
+        o_ResizeBuffers = (ResizeBuffersFn)dummyVtable[13];
         o_Present1 = (Present1Fn)dummyVtable[22];
 
         if (ctx) ctx->Release();
@@ -184,6 +195,7 @@ namespace PresentHook {
                 continue;
             }
             hook->Hook(8, (void*)hkPresent);
+            hook->Hook(13, (void*)hkResizeBuffers);
             hook->Hook(22, (void*)hkPresent1);
             g_hooks.push_back(hook);
             g_swapchains.push_back(candidates[i]);

@@ -94,7 +94,12 @@ namespace CombatShared {
     uintptr_t GetLocalPawn() {
         if (!OffsetConfig::globals.dwLocalPlayerPawn) return 0;
         uintptr_t p = ReadPtr(OffsetConfig::globals.dwLocalPlayerPawn);
-        return IsUserPtr(p) ? p : 0;
+        if (!IsUserPtr(p)) return 0;
+
+        const uintptr_t sn = ReadPtr(p + OffsetConfig::fields.m_pGameSceneNode);
+        if (!IsUserPtr(sn)) return 0;
+
+        return p;
     }
 
     uintptr_t GetLocalController() {
