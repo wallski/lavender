@@ -88,7 +88,8 @@ namespace OffsetConfig {
         uintptr_t inputBase = GetModuleBase("inputsystem.dll");
 
         printf("[OffsetConfig] Resolving RVAs (client=0x%llX engine=0x%llX input=0x%llX)\n",
-            (unsigned long long)clientBase, (unsigned long long)engineBase, (unsigned long long)inputBase); fflush(stdout);
+            (unsigned long long)clientBase, (unsigned long long)engineBase, (unsigned long long)inputBase);
+        fflush(stdout);
 
         globals.dwEntityList += clientBase;
         globals.dwLocalPlayerController += clientBase;

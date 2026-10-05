@@ -1,7 +1,6 @@
 #include "pch.h"
 #include "Skybox.h"
 #include "../chams/Materials.h"
-#include "../../combat/legit/triggerbot/Triggerbot.h"
 #include "../../../../config/OffsetConfig.h"
 #include "../../../../core/memory/PatternScan.h"
 #include "../../../../core/interfaces/InterfaceManager.h"
@@ -81,7 +80,6 @@ namespace Skybox {
 
     extern "C" void SkyboxFSNHandler() {
         TryPrecache();
-        Triggerbot::OnGameThreadWrite();
     }
 
     static uint8_t* WriteSkyboxStub(uintptr_t fn) {

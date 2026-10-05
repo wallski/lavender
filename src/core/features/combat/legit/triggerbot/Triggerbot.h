@@ -1,5 +1,6 @@
 #pragma once
 #include <cstdint>
+#include "UsercmdLayout.h"
 
 namespace Triggerbot {
 
@@ -24,8 +25,6 @@ namespace Triggerbot {
     void SetDelayMs(int ms);
 
     void Tick();
-    void OnGameThreadWrite();
     void RequestExternalFire();
-
     void SetExternalFireCheck(ExternalFireCheckFn fn);
 }

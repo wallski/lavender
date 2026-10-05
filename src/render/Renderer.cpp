@@ -28,7 +28,6 @@ namespace Renderer {
     static float                   g_alpha = 0.0f;
     static bool                    g_unloadRequested = false;
     static bool                    g_readyToUnload = false;
-    static int                     g_skipFrames = 0;
 
     static bool g_firstFrame = true;
     static bool g_prevMenuOpen = true;
@@ -222,11 +221,6 @@ namespace Renderer {
         Triggerbot::Tick();
         Aim::Tick();
 
-        if (g_skipFrames > 0) {
-            g_skipFrames--;
-            return;
-        }
-
         if (!g_renderTarget) return;
 
         ImGui_ImplDX11_NewFrame();
@@ -282,18 +276,4 @@ namespace Renderer {
     bool ShouldUnload() { return g_readyToUnload; }
     int  GetMenuKey() { return Menu::GetMenuKey(); }
     void SetMenuKey(int key) { Menu::SetMenuKey(key); }
-
-    void OnPreResize() {
-        ImGui_ImplDX11_InvalidateDeviceObjects();
-        DestroyRenderTarget();
-    }
-
-    void OnPostResize() {
-        if (!IsDeviceAlive()) return;
-        CreateRenderTarget();
-        if (g_renderTarget) {
-            ImGui_ImplDX11_CreateDeviceObjects();
-            g_skipFrames = 3;
-        }
-    }
 }

@@ -585,10 +585,14 @@ namespace Menu {
         Widgets::EndCard();
 
         bool flash = Removals::IsFlashEnabled();
+        bool smoke = Removals::IsSmokeEnabled();
 
-        Widgets::BeginCard("REMOVALS", 1);
+        Widgets::BeginCard("REMOVALS", 2);
         if (Widgets::Toggle("Remove flash", &flash)) {
             Removals::SetFlashEnabled(flash);
+        }
+        if (Widgets::Toggle("Remove smoke", &smoke)) {
+            Removals::SetSmokeEnabled(smoke);
         }
         Widgets::EndCard();
 

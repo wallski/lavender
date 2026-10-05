@@ -2,6 +2,8 @@
 #include "config/OffsetConfig.h"
 #include "core/config/ConfigManager.h"
 #include "core/hooks/PresentHook.h"
+#include "core/hooks/CreateMoveHook.h"
+#include "core/input/InputHelper.h"
 #include "core/interfaces/InterfaceManager.h"
 #include "core/memory/PatternScan.h"
 #include "core/cvar/CVar.h"
@@ -9,6 +11,7 @@
 #include "core/features/visuals/chams/Materials.h"
 #include "core/features/visuals/esp/Esp.h"
 #include "core/features/visuals/skybox/Skybox.h"
+#include "core/features/visuals/removals/Removals.h"
 #include "core/features/combat/CombatShared.h"
 #include "core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "core/features/combat/legit/aim/Aim.h"
@@ -96,10 +99,8 @@ static uint8_t* WriteSortStub(uintptr_t fn) {
     if (!stub) return nullptr;
     uint8_t* p = stub;
 
-    *p++ = 0x51;
-    *p++ = 0x52;
-    *p++ = 0x41; *p++ = 0x50;
-    *p++ = 0x41; *p++ = 0x51;
+    *p++ = 0x51; *p++ = 0x52;
+    *p++ = 0x41; *p++ = 0x50; *p++ = 0x41; *p++ = 0x51;
     *p++ = 0x48; *p++ = 0x83; *p++ = 0xEC; *p++ = 0x28;
     *p++ = 0x4C; *p++ = 0x89; *p++ = 0xC1;
     *p++ = 0x44; *p++ = 0x89; *p++ = 0xCA;
@@ -107,13 +108,9 @@ static uint8_t* WriteSortStub(uintptr_t fn) {
     *(uint64_t*)p = (uint64_t)&CaptureSortCall; p += 8;
     *p++ = 0xFF; *p++ = 0xD0;
     *p++ = 0x48; *p++ = 0x83; *p++ = 0xC4; *p++ = 0x28;
-    *p++ = 0x41; *p++ = 0x59;
-    *p++ = 0x41; *p++ = 0x58;
-    *p++ = 0x5A;
-    *p++ = 0x59;
-    *p++ = 0x55;
-    *p++ = 0x56;
-    *p++ = 0x57;
+    *p++ = 0x41; *p++ = 0x59; *p++ = 0x41; *p++ = 0x58;
+    *p++ = 0x5A; *p++ = 0x59;
+    *p++ = 0x55; *p++ = 0x56; *p++ = 0x57;
     *p++ = 0x48; *p++ = 0x83; *p++ = 0xEC; *p++ = 0x30;
     *p++ = 0xFF; *p++ = 0x25; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00; *p++ = 0x00;
     *(uint64_t*)p = fn + 16; p += 8;
@@ -172,23 +169,20 @@ void MainThread(HMODULE hModule) {
 
     Chams::SetEntityListGlobal(OffsetConfig::globals.dwEntityList);
     Chams::SetLocalPawnGlobal(OffsetConfig::globals.dwLocalPlayerPawn);
-    Log("[Lavender] Chams globals: entityList=0x%llX localPawn=0x%llX\n",
-        (unsigned long long)OffsetConfig::globals.dwEntityList,
-        (unsigned long long)OffsetConfig::globals.dwLocalPlayerPawn);
 
     ConfigManager::Initialize();
 
-    if (!Materials::Initialize()) {
-        Log("[Lavender] Materials failed\n");
-    }
-
-    if (!Skybox::Initialize()) {
-        Log("[Lavender] Skybox failed (feature disabled)\n");
-    }
+    if (!Materials::Initialize()) Log("[Lavender] Materials failed\n");
+    if (!Skybox::Initialize())    Log("[Lavender] Skybox failed (feature disabled)\n");
 
     CVar::Initialize();
-
     CombatShared::Initialize();
+
+    Removals::Initialize();
+
+    InputHelper::Initialize();
+    CreateMoveHook::Initialize();
+
     Triggerbot::Initialize();
     Aim::Initialize();
 
@@ -199,12 +193,8 @@ void MainThread(HMODULE hModule) {
     uintptr_t fn = Memory::FindPattern("scenesystem.dll", pattern);
     if (fn) {
         g_sortFn = fn;
-        if (InstallSortHook(fn)) {
-            Log("[Lavender] Sort hook installed at 0x%llX\n", (unsigned long long)fn);
-        }
-        else {
-            Log("[Lavender] Sort hook install FAILED\n");
-        }
+        if (InstallSortHook(fn)) Log("[Lavender] Sort hook installed at 0x%llX\n", (unsigned long long)fn);
+        else                     Log("[Lavender] Sort hook install FAILED\n");
     }
     else {
         Log("[Lavender] Sort pattern NOT FOUND\n");
@@ -219,6 +209,9 @@ void MainThread(HMODULE hModule) {
 
     Aim::Shutdown();
     Triggerbot::Shutdown();
+    CreateMoveHook::Shutdown();
+    InputHelper::Shutdown();
+    Removals::Shutdown();
     RestoreSortHook();
     CombatShared::Shutdown();
     CVar::Shutdown();

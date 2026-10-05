@@ -208,6 +208,9 @@ namespace ConfigManager {
         f << "menu.accent_g=" << Style::Accent.y << "\n";
         f << "menu.accent_b=" << Style::Accent.z << "\n";
 
+        f << "removals.flash=" << (Removals::IsFlashEnabled() ? 1 : 0) << "\n";
+        f << "removals.smoke=" << (Removals::IsSmokeEnabled() ? 1 : 0) << "\n";
+
         g_currentName = name;
         return true;
     }
@@ -260,6 +263,7 @@ namespace ConfigManager {
         float espFovCircleColor[4] = { 0.659f, 0.333f, 0.969f, 0.85f };
 
         bool removalsFlash = false;
+        bool removalsSmoke = false;
         bool skyboxEnabled = false;
         int skyboxIndex = 0;
         bool triggerEnabled = false;
@@ -368,6 +372,7 @@ namespace ConfigManager {
             else if (key == "esp.fov_circle_color_a") espFovCircleColor[3] = ParseFloat(val, espFovCircleColor[3]);
 
             else if (key == "removals.flash") removalsFlash = ParseBool(val);
+            else if (key == "removals.smoke") removalsSmoke = ParseBool(val);
             else if (key == "world.skybox_enabled") skyboxEnabled = ParseBool(val);
             else if (key == "world.skybox_index") skyboxIndex = ParseInt(val, skyboxIndex);
             else if (key == "trigger.enabled") triggerEnabled = ParseBool(val);
@@ -435,6 +440,7 @@ namespace ConfigManager {
         Esp::SetFovCircleColor(espFovCircleColor);
 
         Removals::SetFlashEnabled(removalsFlash);
+        Removals::SetSmokeEnabled(removalsSmoke);
         Skybox::SetEnabled(skyboxEnabled);
         Skybox::SetSelectedIndex(skyboxIndex);
         Triggerbot::SetEnabled(triggerEnabled);
