@@ -101,11 +101,7 @@ namespace CreateMoveHook {
         const char* sig = "FF FF FF FF 48 8D 05 ?? ?? ?? ?? 48 89 0D ?? ?? ?? ??";
 
         uintptr_t match = Memory::FindPattern("client.dll", sig);
-        if (!match) {
-            printf("[cm] outer sig not found\n");
-            fflush(stdout);
-            return 0;
-        }
+        if (!match) return 0;
 
         int32_t rel = 0;
         if (!SafeReadI32(match + 7, &rel)) return 0;
@@ -123,11 +119,6 @@ namespace CreateMoveHook {
         SafeReadBytes(candidate, b, 8);
 
         if (b[0] != 0x85 || b[1] != 0xD2 || b[2] != 0x0F || b[3] != 0x85) return 0;
-
-        printf("[cm] outer=0x%llX candidate=0x%llX\n",
-            (unsigned long long)match,
-            (unsigned long long)candidate);
-        fflush(stdout);
 
         return candidate;
     }
@@ -256,7 +247,11 @@ namespace CreateMoveHook {
         }
 
         uintptr_t fn = ResolveCreateMove();
-        if (!fn) return false;
+        if (!fn) {
+            printf("[cm] create_move pattern not found\n");
+            fflush(stdout);
+            return false;
+        }
 
         if (!InstallHook(fn)) {
             printf("[cm] hook install FAILED\n");

@@ -51,13 +51,10 @@ namespace InputHelper {
             if (alloc) g_buttonStateAlloc = ResolveCallTarget(alloc + 16);
         }
 
-        printf("[input-helper] stringCopy=0x%llX serializeMoveCrc=0x%llX subtickAlloc=0x%llX vectorPush=0x%llX btnAlloc=0x%llX\n",
-            (unsigned long long)g_stringCopy,
-            (unsigned long long)g_serializeMoveCrc,
-            (unsigned long long)g_subtickMoveAlloc,
-            (unsigned long long)g_utlVectorPush,
-            (unsigned long long)g_buttonStateAlloc);
-        fflush(stdout);
+        if (!g_stringCopy || !g_serializeMoveCrc) {
+            printf("[input-helper] crc sigs missing\n");
+            fflush(stdout);
+        }
 
         return g_stringCopy != 0 && g_serializeMoveCrc != 0;
     }

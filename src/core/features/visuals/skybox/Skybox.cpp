@@ -45,6 +45,9 @@ namespace Skybox {
     static uint8_t* g_fsn_stub = nullptr;
     static uint8_t g_fsn_original[5] = { 0 };
 
+    static uintptr_t g_savedExistingMatAddr = 0;
+    static uintptr_t g_savedExistingMatInner = 0;
+
     static bool SafeReadPtr(uintptr_t addr, uintptr_t* out) {
         *out = 0;
         __try { *out = *reinterpret_cast<uintptr_t*>(addr); }
@@ -102,6 +105,14 @@ namespace Skybox {
         return h;
     }
 
+    static void RestoreExistingMaterial() {
+        if (g_savedExistingMatAddr == 0) return;
+        __try { *reinterpret_cast<uintptr_t*>(g_savedExistingMatAddr) = g_savedExistingMatInner; }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
+        g_savedExistingMatAddr = 0;
+        g_savedExistingMatInner = 0;
+    }
+
     static void* AllocNear(void* hint, size_t size) {
         SYSTEM_INFO si;
         GetSystemInfo(&si);
@@ -127,6 +138,15 @@ namespace Skybox {
     void TryBuildRequested();
 
     extern "C" void SkyboxFSNHandler() {
+        static bool s_wasInLevel = false;
+        uintptr_t pawn = SafeReadLocalPawn();
+        const bool inLevel = (pawn != 0);
+
+        if (s_wasInLevel && !inLevel) {
+            RestoreExistingMaterial();
+        }
+        s_wasInLevel = inLevel;
+
         TryBuildRequested();
     }
 
@@ -248,6 +268,8 @@ namespace Skybox {
     }
 
     static void UninstallHooks() {
+        RestoreExistingMaterial();
+
         if (g_draw_hook_fn) {
             DWORD old = 0;
             if (VirtualProtect((void*)g_draw_hook_fn, 5, PAGE_EXECUTE_READWRITE, &old)) {
@@ -424,6 +446,7 @@ namespace Skybox {
     bool IsEnabled() { return g_enabled != 0; }
 
     void SetEnabled(bool enabled) {
+        if (!enabled) RestoreExistingMaterial();
         InterlockedExchange(&g_enabled, enabled ? 1 : 0);
     }
 
@@ -444,7 +467,6 @@ namespace Skybox {
     void OnSkyboxDraw(void* mesh_array, uint32_t count) {
         if (g_enabled == 0) return;
         if (!mesh_array || count == 0) return;
-
         if (!InLiveMatch()) return;
 
         const int sel = g_selected;
@@ -456,16 +478,26 @@ namespace Skybox {
         uintptr_t base = (uintptr_t)mesh_array;
         uintptr_t slot = base + (uintptr_t)count * 0x70 - 0x58;
 
-        uintptr_t descriptor = 0;
-        if (!SafeReadPtr(slot, &descriptor)) return;
-        if (descriptor < 0x10000 || descriptor > 0x00007FFFFFFFFFFF) return;
+        uintptr_t wrapper = 0;
+        if (!SafeReadPtr(slot, &wrapper)) return;
+        if (wrapper < 0x10000 || wrapper > 0x00007FFFFFFFFFFF) return;
 
-        uintptr_t existing = 0;
-        if (!SafeReadPtr(descriptor + 0xD0, &existing)) return;
-        if (existing == custom) return;
-        if (existing < 0x10000 || existing > 0x00007FFFFFFFFFFF) return;
+        uintptr_t existingMat = 0;
+        if (!SafeReadPtr(wrapper + 0xD0, &existingMat)) return;
+        if (existingMat < 0x10000 || existingMat > 0x00007FFFFFFFFFFF) return;
+            
+        if (g_savedExistingMatAddr == 0) {
+            uintptr_t inner = 0;
+            if (!SafeReadPtr(existingMat, &inner)) return;
+            if (inner == custom) return;
 
-        __try { *reinterpret_cast<uintptr_t*>(descriptor + 0xD0) = custom; }
+            g_savedExistingMatAddr = existingMat;
+            g_savedExistingMatInner = inner;
+        }
+
+        if (g_savedExistingMatAddr != existingMat) return;
+
+        __try { *reinterpret_cast<uintptr_t*>(existingMat) = custom; }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
 }

@@ -93,6 +93,25 @@ namespace Menu {
         ImGui::PopID();
     }
 
+    static void DrawRageTab() {
+        const float totalW = ImGui::GetContentRegionAvail().x;
+        const float gap = 10.0f;
+        const float colW = (totalW - gap) * 0.5f;
+
+        ImGui::BeginChild("##rage_col_left", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        Widgets::BeginCard("RAGE", 1);
+        Widgets::TextMuted("porting from velocity...");
+        Widgets::EndCard();
+        ImGui::EndChild();
+
+        ImGui::SameLine(0, gap);
+
+        ImGui::BeginChild("##rage_col_right", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        ImGui::EndChild();
+    }
+
     static void DrawAimCard() {
         bool enabled = Aim::IsEnabled();
         int key = Aim::GetKey();
@@ -819,10 +838,10 @@ namespace Menu {
             ImGui::PopFont();
             ImGui::Dummy(ImVec2(0, 16));
 
-            const char* titles[] = { "Legit",   "Visuals",        "World",          "Misc",          "Config" };
-            const char* subtitles[] = { "aim assist", "visual effects", "world effects", "miscellaneous", "settings" };
+            const char* titles[] = { "Rage", "Legit", "Visuals", "World", "Misc", "Config" };
+            const char* subtitles[] = { "combat ragebot", "aim assist", "visual effects", "world effects", "miscellaneous", "settings" };
 
-            for (int i = 0; i < 5; i++) {
+            for (int i = 0; i < 6; i++) {
                 Widgets::SidebarItem(titles[i], subtitles[i], &g_activeTab, i);
             }
         }
@@ -835,11 +854,12 @@ namespace Menu {
         {
             ImGui::Dummy(ImVec2(0, 6));
             switch (g_activeTab) {
-            case 0: DrawLegitTab();   break;
-            case 1: DrawVisualsTab(); break;
-            case 2: DrawWorldTab();   break;
-            case 3: DrawMiscTab();    break;
-            case 4: DrawConfigTab();  break;
+            case 0: DrawRageTab();    break;
+            case 1: DrawLegitTab();   break;
+            case 2: DrawVisualsTab(); break;
+            case 3: DrawWorldTab();   break;
+            case 4: DrawMiscTab();    break;
+            case 5: DrawConfigTab();  break;
             }
         }
         ImGui::EndChild();
