@@ -11,7 +11,6 @@ namespace Skybox {
     };
 
     bool Initialize();
-    void TryPrecache();
     void Shutdown();
 
     bool IsEnabled();

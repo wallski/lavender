@@ -30,7 +30,7 @@ namespace Skybox {
     static std::vector<uintptr_t> g_materials;
     static volatile LONG g_enabled = 0;
     static volatile LONG g_selected = 0;
-    static volatile LONG g_materials_ready = 0;
+    static volatile LONG g_requested = -1;
 
     static uintptr_t g_resource_system = 0;
     static uintptr_t g_fn_init_path_buffer = 0;
@@ -45,14 +45,52 @@ namespace Skybox {
     static uint8_t* g_fsn_stub = nullptr;
     static uint8_t g_fsn_original[5] = { 0 };
 
+    static bool SafeReadPtr(uintptr_t addr, uintptr_t* out) {
+        *out = 0;
+        __try { *out = *reinterpret_cast<uintptr_t*>(addr); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+        return true;
+    }
+
+    static bool SafeReadI32(uintptr_t addr, int32_t* out) {
+        *out = 0;
+        __try { *out = *reinterpret_cast<int32_t*>(addr); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+        return true;
+    }
+
+    static bool SafeReadF32(uintptr_t addr, float* out) {
+        *out = 0.0f;
+        __try { *out = *reinterpret_cast<float*>(addr); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+        return true;
+    }
+
     static uintptr_t SafeReadLocalPawn() {
         uintptr_t global = OffsetConfig::globals.dwLocalPlayerPawn;
         if (!global) return 0;
         uintptr_t pawn = 0;
-        __try { pawn = *reinterpret_cast<uintptr_t*>(global); }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+        if (!SafeReadPtr(global, &pawn)) return 0;
         if (pawn < 0x10000) return 0;
         return pawn;
+    }
+
+    static float SafeReadCurtime() {
+        uintptr_t globalVars = 0;
+        if (!SafeReadPtr(OffsetConfig::globals.dwGlobalVars, &globalVars)) return 0.0f;
+        if (globalVars < 0x10000) return 0.0f;
+        float curtime = 0.0f;
+        SafeReadF32(globalVars + 0x00, &curtime);
+        return curtime;
+    }
+
+    static bool InLiveMatch() {
+        uintptr_t pawn = SafeReadLocalPawn();
+        if (!pawn) return false;
+        if (SafeReadCurtime() < 5.0f) return false;
+        int health = 0;
+        SafeReadI32(pawn + OffsetConfig::fields.m_iHealth, &health);
+        return health > 0 && health <= 200;
     }
 
     static uint32_t HashPath(const char* s) {
@@ -86,10 +124,10 @@ namespace Skybox {
         OnSkyboxDraw(mesh_array, count);
     }
 
-    void TryPrecache();
+    void TryBuildRequested();
 
     extern "C" void SkyboxFSNHandler() {
-        TryPrecache();
+        TryBuildRequested();
     }
 
     static uint8_t* WriteSkyboxStub(uintptr_t fn) {
@@ -342,46 +380,38 @@ namespace Skybox {
             return false;
         }
 
-        printf("[Skybox] Ready (precache enabled).\n");
+        printf("[Skybox] Ready (lazy precache).\n");
         return true;
     }
 
-    void TryPrecache() {
-        if (g_materials_ready != 0) return;
+    void TryBuildRequested() {
+        const int req = g_requested;
+        if (req < 1 || req >= (int)g_entries.size()) return;
+        if (g_materials[req] != 0) return;
 
-        static volatile LONG s_enter_guard = 0;
-        if (InterlockedCompareExchange(&s_enter_guard, 1, 0) != 0) return;
+        static volatile LONG s_building = 0;
+        if (InterlockedCompareExchange(&s_building, 1, 0) != 0) return;
 
-        if (!OffsetConfig::globals.dwLocalPlayerPawn) {
-            InterlockedExchange(&s_enter_guard, 0);
-            return;
-        }
-        uintptr_t localPawn = 0;
-        __try {
-            localPawn = *reinterpret_cast<uintptr_t*>(OffsetConfig::globals.dwLocalPlayerPawn);
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER) {
-            InterlockedExchange(&s_enter_guard, 0);
-            return;
-        }
-        if (localPawn < 0x10000) {
-            InterlockedExchange(&s_enter_guard, 0);
+        if (!InLiveMatch()) {
+            InterlockedExchange(&s_building, 0);
             return;
         }
 
-        InterlockedExchange(&g_materials_ready, 1);
+        printf("[Skybox] Building '%s' on demand\n", g_entries[req].name.c_str());
+        fflush(stdout);
 
-        int ok = 0;
-        const int total = (int)g_entries.size() - 1;
+        uintptr_t mat = TryBuildMaterial(g_entries[req].path.c_str());
+        g_materials[req] = mat;
 
-        for (size_t i = 1; i < g_entries.size(); i++) {
-            uintptr_t mat = TryBuildMaterial(g_entries[i].path.c_str());
-            g_materials[i] = mat;
-            if (mat) ok++;
-            else printf("[Skybox] Failed to compile %s\n", g_entries[i].name.c_str());
+        if (mat) {
+            printf("[Skybox] Compiled %s\n", g_entries[req].name.c_str());
         }
+        else {
+            printf("[Skybox] Failed to compile %s\n", g_entries[req].name.c_str());
+        }
+        fflush(stdout);
 
-        printf("[Skybox] Compiled %d/%d skyboxes\n", ok, total);
+        InterlockedExchange(&s_building, 0);
     }
 
     void Shutdown() {
@@ -403,37 +433,39 @@ namespace Skybox {
         if (index < 0) index = 0;
         if (index >= (int)g_entries.size()) index = (int)g_entries.size() - 1;
         InterlockedExchange(&g_selected, index);
+
+        if (index >= 1 && index < (int)g_entries.size()) {
+            InterlockedExchange(&g_requested, index);
+        }
     }
 
     const std::vector<Entry>& GetEntries() { return g_entries; }
 
     void OnSkyboxDraw(void* mesh_array, uint32_t count) {
-        if (g_materials_ready == 0) return;
+        if (g_enabled == 0) return;
         if (!mesh_array || count == 0) return;
 
-        if (SafeReadLocalPawn() == 0) return;
+        if (!InLiveMatch()) return;
+
+        const int sel = g_selected;
+        if (sel <= 0 || sel >= (int)g_entries.size()) return;
+
+        const uintptr_t custom = g_materials[sel];
+        if (custom < 0x10000 || custom > 0x00007FFFFFFFFFFF) return;
 
         uintptr_t base = (uintptr_t)mesh_array;
         uintptr_t slot = base + (uintptr_t)count * 0x70 - 0x58;
 
         uintptr_t descriptor = 0;
-        __try { descriptor = *(uintptr_t*)slot; }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return; }
-        if (!descriptor) return;
+        if (!SafeReadPtr(slot, &descriptor)) return;
+        if (descriptor < 0x10000 || descriptor > 0x00007FFFFFFFFFFF) return;
 
-        uintptr_t binding = 0;
-        __try { binding = *(uintptr_t*)(descriptor + 0xD0); }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return; }
-        if (!binding) return;
+        uintptr_t existing = 0;
+        if (!SafeReadPtr(descriptor + 0xD0, &existing)) return;
+        if (existing == custom) return;
+        if (existing < 0x10000 || existing > 0x00007FFFFFFFFFFF) return;
 
-        const int sel = g_selected;
-        const bool enabled = (g_enabled != 0);
-        const uintptr_t custom = (sel > 0 && sel < (int)g_entries.size())
-            ? g_materials[sel] : 0;
-
-        if (enabled && custom != 0) {
-            __try { *(uintptr_t*)binding = custom; }
-            __except (EXCEPTION_EXECUTE_HANDLER) {}
-        }
+        __try { *reinterpret_cast<uintptr_t*>(descriptor + 0xD0) = custom; }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
 }

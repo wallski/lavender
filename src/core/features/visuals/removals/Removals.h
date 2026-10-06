@@ -11,5 +11,6 @@ namespace Removals {
     bool IsSmokeEnabled();
     void SetSmokeEnabled(bool enabled);
 
+    void OnLevelChange(bool inLevel);
     void Update();
 }

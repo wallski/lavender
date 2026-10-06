@@ -8,12 +8,11 @@
 #include "imgui_impl_win32.h"
 #include "../core/features/visuals/esp/Esp.h"
 #include "../core/features/visuals/removals/Removals.h"
+#include "../core/features/visuals/bombtimer/BombTimer.h"
 #include "../core/features/combat/CombatShared.h"
 #include "../core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "../core/features/combat/legit/aim/Aim.h"
 #include "../config/OffsetConfig.h"
-
-#include "../core/features/visuals/bombtimer/BombTimer.h"
 
 LRESULT WINAPI ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
@@ -221,6 +220,16 @@ namespace Renderer {
         CombatShared::BeginFrame();
         Removals::Update();
         BombTimer::Update();
+
+        {
+            static bool s_wasInLevel = false;
+            const bool nowInLevel = (CombatShared::GetLocalPawn() != 0);
+            if (nowInLevel != s_wasInLevel) {
+                Removals::OnLevelChange(nowInLevel);
+                s_wasInLevel = nowInLevel;
+            }
+        }
+
         Triggerbot::Tick();
         Aim::Tick();
 

@@ -10,6 +10,7 @@ namespace Removals {
 
     static uintptr_t g_renderSmokeFn = 0;
     static uint8_t g_renderSmokeOriginal = 0;
+    static bool g_smokePatched = false;
 
     static bool IsValidPtr(uintptr_t p) {
         return p >= 0x10000 && p <= 0x00007FFFFFFFFFFF;
@@ -85,6 +86,9 @@ namespace Removals {
     static void ApplySmokePatch(bool enabled) {
         if (!g_renderSmokeFn) return;
 
+        if (enabled && g_smokePatched) return;
+        if (!enabled && !g_smokePatched) return;
+
         DWORD oldProtect = 0;
         if (!VirtualProtect((void*)g_renderSmokeFn, 1, PAGE_EXECUTE_READWRITE, &oldProtect)) return;
 
@@ -93,6 +97,7 @@ namespace Removals {
 
         VirtualProtect((void*)g_renderSmokeFn, 1, oldProtect, &oldProtect);
         FlushInstructionCache(GetCurrentProcess(), (void*)g_renderSmokeFn, 1);
+        g_smokePatched = enabled;
     }
 
     bool Initialize() {
@@ -101,11 +106,12 @@ namespace Removals {
     }
 
     void Shutdown() {
-        if (g_renderSmokeFn && g_smokeEnabled != 0) {
+        if (g_renderSmokeFn && g_smokePatched) {
             ApplySmokePatch(false);
         }
         g_renderSmokeFn = 0;
         g_renderSmokeOriginal = 0;
+        g_smokePatched = false;
     }
 
     bool IsFlashEnabled() { return g_flashEnabled != 0; }
@@ -115,6 +121,14 @@ namespace Removals {
     void SetSmokeEnabled(bool enabled) {
         InterlockedExchange(&g_smokeEnabled, enabled ? 1 : 0);
         ApplySmokePatch(enabled);
+    }
+
+    void OnLevelChange(bool inLevel) {
+        if (g_smokeEnabled == 0) {
+            if (g_smokePatched) ApplySmokePatch(false);
+            return;
+        }
+        ApplySmokePatch(inLevel);
     }
 
     static void UpdateFlash() {

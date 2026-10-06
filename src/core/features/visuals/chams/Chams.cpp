@@ -37,23 +37,22 @@ namespace Chams {
         __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
 
-    static void __TryGetSchemaName(uintptr_t entity, char* outBuf, size_t outSize) {
-        outBuf[0] = '\0';
+    static bool __TryIsPlayerPawn(uintptr_t entity) {
         __try {
             uintptr_t identity = *reinterpret_cast<uintptr_t*>(entity + 0x10);
-            if (!identity) return;
+            if (!identity) return false;
             uintptr_t entityClass = *reinterpret_cast<uintptr_t*>(identity + 0x8);
-            if (!entityClass) return;
+            if (!entityClass) return false;
             uintptr_t classInfo = *reinterpret_cast<uintptr_t*>(entityClass + 0x58);
-            if (!classInfo) return;
+            if (!classInfo) return false;
             const char* namePtr = *reinterpret_cast<const char**>(classInfo + 0x8);
-            if (!namePtr) return;
-            size_t i = 0;
-            while (i < outSize - 1 && namePtr[i] != '\0') { outBuf[i] = namePtr[i]; i++; }
-            outBuf[i] = '\0';
+            if (!namePtr) return false;
+            return namePtr[0] == 'C' &&
+                namePtr[1] == '_' &&
+                strcmp(namePtr, "C_CSPlayerPawn") == 0;
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {
-            strncpy_s(outBuf, outSize, "(faulted)", outSize - 1);
+            return false;
         }
     }
 
@@ -121,6 +120,8 @@ namespace Chams {
 
         const Materials::Id resolved = ResolveMaterial();
         const uintptr_t material = Materials::Get(resolved);
+        if (material == 0) return;
+
         const uint32_t packed = PackColor(g_color);
 
         int localTeam = 0;
@@ -128,31 +129,41 @@ namespace Chams {
             localTeam = __TryReadInt(localPawn + OffsetConfig::fields.m_iTeamNum);
         }
 
+        uintptr_t lastEnt = 0;
+        bool lastEntIsPlayer = false;
+
         for (uint32_t i = 0; i < count; i++) {
             uintptr_t prim = arr + (uintptr_t)i * 0x70;
+
+            uintptr_t slotA = __TryReadPtr(prim + 0x20);
+            uintptr_t slotB = __TryReadPtr(prim + 0x28);
+            if (slotA < 0x10000 || slotA > 0x00007FFFFFFFFFFF) continue;
+            if (slotB < 0x10000 || slotB > 0x00007FFFFFFFFFFF) continue;
+            if (slotA != slotB) continue;
 
             uintptr_t sceneObj = __TryReadPtr(prim + 0x18);
             if (!sceneObj) continue;
 
             uint32_t handle = __TryReadU32(sceneObj + 0xc0);
+            if (handle == 0 || handle == 0xffffffff) continue;
+
             uintptr_t ent = LookupEntity(handle, g_entityListGlobal);
             if (!ent) continue;
             if (ent == localPawn) continue;
 
-            char name[128];
-            __TryGetSchemaName(ent, name, sizeof(name));
-            if (name[0] != 'C') continue;
-            if (strcmp(name, "C_CSPlayerPawn") != 0) continue;
+            if (ent != lastEnt) {
+                lastEnt = ent;
+                lastEntIsPlayer = __TryIsPlayerPawn(ent);
+            }
+            if (!lastEntIsPlayer) continue;
 
             if (localTeam != 0) {
                 int entTeam = __TryReadInt(ent + OffsetConfig::fields.m_iTeamNum);
                 if (entTeam == localTeam) continue;
             }
 
-            if (material) {
-                __TryWritePtr(prim + 0x20, material);
-                __TryWritePtr(prim + 0x28, material);
-            }
+            __TryWritePtr(prim + 0x20, material);
+            __TryWritePtr(prim + 0x28, material);
             __TryWriteU32(prim + 0x50, packed);
         }
     }

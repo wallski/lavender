@@ -12,11 +12,11 @@
 #include "core/features/visuals/esp/Esp.h"
 #include "core/features/visuals/skybox/Skybox.h"
 #include "core/features/visuals/removals/Removals.h"
+#include "core/features/visuals/bombtimer/BombTimer.h"
 #include "core/features/combat/CombatShared.h"
 #include "core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "core/features/combat/legit/aim/Aim.h"
 #include "render/Renderer.h"
-#include "core/features/visuals/bombtimer/BombTimer.h"
 #include <thread>
 #include <cstdarg>
 
@@ -182,7 +182,6 @@ void MainThread(HMODULE hModule) {
     Removals::Initialize();
     BombTimer::Initialize();
 
-
     InputHelper::Initialize();
     CreateMoveHook::Initialize();
 
@@ -214,8 +213,8 @@ void MainThread(HMODULE hModule) {
     Triggerbot::Shutdown();
     CreateMoveHook::Shutdown();
     InputHelper::Shutdown();
-    Removals::Shutdown();
     BombTimer::Shutdown();
+    Removals::Shutdown();
     RestoreSortHook();
     CombatShared::Shutdown();
     CVar::Shutdown();

@@ -20,6 +20,7 @@ namespace Materials {
 
     bool Initialize();
     void Shutdown();
+    void Reset();
 
     uintptr_t Compile(const char* kv, const char* name);
 

@@ -266,6 +266,10 @@ namespace Materials {
         for (auto& m : g_materials) m = 0;
     }
 
+    void Reset() {
+        for (auto& m : g_materials) m = 0;
+    }
+
     uintptr_t Compile(const char* kv, const char* name) {
         return LoadMaterial(kv, name);
     }
