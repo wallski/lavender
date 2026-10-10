@@ -64,8 +64,8 @@ namespace CombatShared {
         Vec3      rightLegPos;
         Vec3      bones[32];
         bool      visible;
-        std::string name;
-        std::string weaponName;
+        char      name[64];
+        char      weaponName[32];
         int       ammo;
         int       maxAmmo;
         bool      hasWeapon;

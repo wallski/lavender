@@ -20,12 +20,12 @@ namespace Rage {
     static volatile LONG g_enabled = 0;
     static volatile LONG g_teamCheck = 1;
     static volatile LONG g_hitboxes = 0x1F;
-    static float g_fov = 15.0f;
+    static float g_fov = 180.0f;
     static volatile LONG g_minDamage = 1;
     static volatile LONG g_silent = 1;
     static volatile LONG g_autoShoot = 1;
     static volatile LONG g_noSpread = 0;
-    static volatile LONG g_autoScope = 1;
+    static volatile LONG g_autoScope = 0;
 
     static std::atomic<bool> g_rageAttackWritten{ false };
 
@@ -33,6 +33,8 @@ namespace Rage {
     static uintptr_t g_calculateSpread = 0;
     static uintptr_t g_getInaccuracy = 0;
     static uintptr_t g_updateAccuracy = 0;
+
+    static int s_lastFireTick = 0;
 
     static constexpr uint32_t HB_HEAD = 1u << 0;
     static constexpr uint32_t HB_NECK = 1u << 1;
@@ -99,6 +101,14 @@ namespace Rage {
     static WeaponState g_cachedWs{};
     static uint32_t g_cachedWsHandle = 0;
 
+    static uint32_t g_tickBaseOff = 0;
+    static uint32_t g_attrMgrOff = 0;
+    static uint32_t g_attrItemOff = 0;
+    static uint32_t g_itemDefIdxOff = 0;
+    static uint32_t g_punchPredOff = 0;
+    static uint32_t g_punchUnpredOff = 0;
+    static uint32_t g_nextPrimaryTickOff = 0;
+
     static uintptr_t ResolveRelCall(uintptr_t instr) {
         int32_t rel = 0;
         __try { rel = *reinterpret_cast<int32_t*>(instr + 1); }
@@ -118,6 +128,12 @@ namespace Rage {
         return true;
     }
 
+    static bool SafeReadU16(uintptr_t addr, uint16_t* out) {
+        __try { *out = *reinterpret_cast<uint16_t*>(addr); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+        return true;
+    }
+
     static bool SafeReadU32(uintptr_t addr, uint32_t* out) {
         __try { *out = *reinterpret_cast<uint32_t*>(addr); }
         __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
@@ -130,20 +146,27 @@ namespace Rage {
         return true;
     }
 
-    static int SafeReadTickBase(uintptr_t controller) {
-        if (controller < 0x10000) return 0;
+    static int ReadTickBase(uintptr_t controller) {
+        if (controller < 0x10000 || !g_tickBaseOff) return 0;
         int32_t tb = 0;
-        __try { tb = *reinterpret_cast<int32_t*>(controller + 0x3EC); }
+        __try { tb = *reinterpret_cast<int32_t*>(controller + g_tickBaseOff); }
         __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
         return tb;
     }
 
-    static bool SafeReadScoped(uintptr_t pawn, uint32_t offset) {
-        if (pawn < 0x10000 || offset == 0) return false;
-        bool s = false;
-        __try { s = *reinterpret_cast<bool*>(pawn + offset); }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
-        return s;
+    static void InitializeSchemaOffsets() {
+        g_tickBaseOff = SCHEMA("CBasePlayerController", "m_nTickBase"_hash);
+        g_attrMgrOff = SCHEMA("C_EconEntity", "m_AttributeManager"_hash);
+        g_attrItemOff = SCHEMA("C_AttributeContainer", "m_Item"_hash);
+        g_itemDefIdxOff = SCHEMA("C_EconItemView", "m_iItemDefinitionIndex"_hash);
+        g_punchPredOff = SCHEMA("CCSPlayer_AimPunchServices", "m_predictableBaseAngle"_hash);
+        g_punchUnpredOff = SCHEMA("CCSPlayer_AimPunchServices", "m_unpredictableBaseAngle"_hash);
+        g_nextPrimaryTickOff = SCHEMA("C_BasePlayerWeapon", "m_nNextPrimaryAttackTick"_hash);
+
+        printf("[Rage] schema: tickBase=0x%X attrMgr=0x%X attrItem=0x%X itemDef=0x%X punchPred=0x%X punchUnpred=0x%X nextPrimary=0x%X\n",
+            g_tickBaseOff, g_attrMgrOff, g_attrItemOff, g_itemDefIdxOff,
+            g_punchPredOff, g_punchUnpredOff, g_nextPrimaryTickOff);
+        fflush(stdout);
     }
 
     static void InitializeSpreadPatterns() {
@@ -240,6 +263,31 @@ namespace Rage {
         return aimAngle;
     }
 
+    static math::vector3 GetAimPunch(uintptr_t localPawn) {
+        math::vector3 out{ 0.0f, 0.0f, 0.0f };
+        if (localPawn < 0x10000) return out;
+
+        uintptr_t services = 0;
+        if (!SafeReadPtr(localPawn + OffsetConfig::fields.m_pAimPunchServices, &services)) return out;
+        if (services < 0x10000) return out;
+
+        if (!g_punchPredOff || !g_punchUnpredOff) return out;
+
+        float px = 0.0f, py = 0.0f, pz = 0.0f;
+        float ux = 0.0f, uy = 0.0f, uz = 0.0f;
+        SafeReadF32(services + g_punchPredOff + 0, &px);
+        SafeReadF32(services + g_punchPredOff + 4, &py);
+        SafeReadF32(services + g_punchPredOff + 8, &pz);
+        SafeReadF32(services + g_punchUnpredOff + 0, &ux);
+        SafeReadF32(services + g_punchUnpredOff + 4, &uy);
+        SafeReadF32(services + g_punchUnpredOff + 8, &uz);
+
+        out.x = px + ux;
+        out.y = py + uy;
+        out.z = pz + uz;
+        return out;
+    }
+
     static bool IsGameFocused() {
         HWND fg = GetForegroundWindow();
         if (!fg) return false;
@@ -290,15 +338,12 @@ namespace Rage {
     static void ReadItemDefIdx(uintptr_t weapon, int* out) {
         *out = 0;
         if (weapon < 0x10000) return;
-        uintptr_t attributeManager = 0;
-        if (!SafeReadPtr(weapon + 0x1180, &attributeManager)) return;
-        if (attributeManager < 0x10000) return;
-        uintptr_t itemView = 0;
-        if (!SafeReadPtr(attributeManager + 0x50, &itemView)) return;
-        if (itemView < 0x10000) return;
-        uint32_t v = 0;
-        if (!SafeReadU32(itemView + 0x1BA, &v)) return;
-        *out = (int)(v & 0xFFFF);
+        if (!g_attrMgrOff || !g_attrItemOff || !g_itemDefIdxOff) return;
+
+        const uintptr_t addr = weapon + g_attrMgrOff + g_attrItemOff + g_itemDefIdxOff;
+        uint16_t v = 0;
+        if (!SafeReadU16(addr, &v)) return;
+        *out = (int)v;
     }
 
     static void BackupRestoreAccuracy(uintptr_t weapon, bool doUpdateAndRead,
@@ -454,13 +499,6 @@ namespace Rage {
             if (teamCheck && e.team == localTeam) continue;
             if (e.headPos.Length() < 1.0f) continue;
 
-            {
-                const Vec3 headAim = CombatShared::CalculateAngle(
-                    Vec3(eye.x, eye.y, eye.z), e.headPos);
-                const float headFov = CombatShared::AngleDistance(curV, headAim);
-                if (headFov > maxFov * 2.0f) continue;
-            }
-
             const size_t count = sizeof(kHitboxes) / sizeof(kHitboxes[0]);
             for (size_t i = 0; i < count; i++) {
                 const auto& hb = kHitboxes[i];
@@ -501,8 +539,6 @@ namespace Rage {
 
                 break;
             }
-
-            if (bestPriority == 100) break;
         }
 
         return out;
@@ -547,36 +583,30 @@ namespace Rage {
 
         ScanResult res = DoScan(localPawn, ws, eye, curAngles);
 
-        bool suppressFire = false;
-        if (res.valid && g_autoScope != 0 && ws.valid && ws.weaponType == 5) {
-            const uint32_t scopedOff = SCHEMA("C_CSPlayerPawn", "m_bIsScoped"_hash);
-            if (!SafeReadScoped(localPawn, scopedOff)) {
-                cmd->buttons.value |= (1ull << 11);
-                cmd->buttons.value_changed |= (1ull << 11);
-                suppressFire = true;
-            }
-        }
-
-        if (!res.valid || suppressFire) {
+        if (!res.valid) {
             ReleaseAttackIfHeld(cmd);
             return;
         }
 
-        static ULONGLONG s_lastShot = 0;
         static uintptr_t s_lastTarget = 0;
         static bool s_lastAttackState = false;
-        constexpr ULONGLONG kShotIntervalMs = 62;
-
-        const ULONGLONG now = GetTickCount64();
 
         if (res.pawn != s_lastTarget) {
             s_lastTarget = res.pawn;
-            s_lastShot = 0;
         }
 
+        const uintptr_t lc = CombatShared::GetLocalController();
+        const int tickBase = ReadTickBase(lc);
+
+        int nextPrimaryTick = 0;
+        if (g_nextPrimaryTickOff && ws.valid && ws.weapon) {
+            SafeReadI32(ws.weapon + g_nextPrimaryTickOff, &nextPrimaryTick);
+        }
+        const bool weaponReady = (tickBase > 0) && (tickBase >= nextPrimaryTick);
+        const bool tickAdvanced = (tickBase > 0) && (tickBase > s_lastFireTick);
+
         const bool autoShoot = (g_autoShoot != 0);
-        const bool cooldownExpired = (now - s_lastShot) >= kShotIntervalMs;
-        const bool fireThisTick = autoShoot && cooldownExpired;
+        const bool fireThisTick = autoShoot && weaponReady && tickAdvanced;
 
         const math::vector3 userAngleVec{ curAngles.x, curAngles.y, 0.0f };
         const bool silent = (g_silent != 0);
@@ -584,10 +614,9 @@ namespace Rage {
 
         if (fireThisTick && g_noSpread != 0) {
             WeaponState wsAcc = GetWeaponStateWithAccuracy(localPawn);
-            if (wsAcc.valid && (wsAcc.inaccuracy > 0.001f || wsAcc.spread > 0.001f)) {
-                uintptr_t lc = CombatShared::GetLocalController();
-                const int tickBase = SafeReadTickBase(lc);
-                if (tickBase > 0) {
+
+            if (wsAcc.valid && tickBase > 0) {
+                if (wsAcc.inaccuracy > 0.001f || wsAcc.spread > 0.001f) {
                     const math::vector3 corrected = FindSpreadCorrection(
                         writeAngle, tickBase + 1, wsAcc);
                     if (corrected.x != 0.0f || corrected.y != 0.0f || corrected.z != 0.0f) {
@@ -595,6 +624,21 @@ namespace Rage {
                     }
                 }
             }
+        }
+
+        const math::vector3 aimPunch = GetAimPunch(localPawn);
+
+        const math::vector3 serverAngle{
+            writeAngle.x - aimPunch.x,
+            writeAngle.y - aimPunch.y,
+            0.0f
+        };
+
+        if (fireThisTick) {
+            printf("[rage] fire tick=%d nextPrimary=%d recoil=%.3f inacc=%.4f punch=(%.3f,%.3f) aim=(%.2f,%.2f)\n",
+                tickBase, nextPrimaryTick, ws.recoilIndex, ws.inaccuracy,
+                aimPunch.x, aimPunch.y, writeAngle.x, writeAngle.y);
+            fflush(stdout);
         }
 
         auto* base = GetProtobufBase(cmd);
@@ -606,8 +650,8 @@ namespace Rage {
                     va->set_z(0.0f);
                 }
                 else {
-                    va->set_x(writeAngle.x);
-                    va->set_y(writeAngle.y);
+                    va->set_x(serverAngle.x);
+                    va->set_y(serverAngle.y);
                     va->set_z(writeAngle.z);
                 }
             }
@@ -622,17 +666,17 @@ namespace Rage {
             if (rawVa < 0x10000) continue;
 
             auto* va = reinterpret_cast<proto::msg_qangle*>(rawVa + 0x10);
-            va->set_x(writeAngle.x);
-            va->set_y(writeAngle.y);
+            va->set_x(serverAngle.x);
+            va->set_y(serverAngle.y);
             va->set_z(writeAngle.z);
         }
 
         if (!silent) {
-            WriteClientViewAngles(writeAngle);
+            WriteClientViewAngles(serverAngle);
         }
 
         if (fireThisTick) {
-            s_lastShot = now;
+            s_lastFireTick = tickBase;
             g_rageAttackWritten.store(true);
         }
         else {
@@ -657,12 +701,14 @@ namespace Rage {
     }
 
     void Initialize() {
+        InitializeSchemaOffsets();
         InitializeSpreadPatterns();
         CreateMoveHook::Register(&OnCreateMoveInternal);
     }
 
     void Shutdown() {
         g_rageAttackWritten.store(false);
+        s_lastFireTick = 0;
     }
 
     void Tick() {}
@@ -678,7 +724,7 @@ namespace Rage {
 
     uint32_t GetHitboxes() { return (uint32_t)g_hitboxes; }
     void SetHitboxes(uint32_t mask) {
-        if (mask == 0) mask = HB_HEAD;  
+        if (mask == 0) mask = HB_HEAD;
         InterlockedExchange(&g_hitboxes, (LONG)mask);
     }
 
@@ -705,6 +751,6 @@ namespace Rage {
     bool IsNoSpread() { return g_noSpread != 0; }
     void SetNoSpread(bool enabled) { InterlockedExchange(&g_noSpread, enabled ? 1 : 0); }
 
-    bool IsAutoScope() { return g_autoScope != 0; }
-    void SetAutoScope(bool enabled) { InterlockedExchange(&g_autoScope, enabled ? 1 : 0); }
+    bool IsAutoScope() { return false; }
+    void SetAutoScope(bool) {}
 }

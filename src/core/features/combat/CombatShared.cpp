@@ -397,6 +397,17 @@ namespace CombatShared {
         char name[128];
     };
 
+    static void CopyStringSafe(char* dst, size_t dstSize, const char* src) {
+        if (!dst || dstSize == 0) return;
+        if (!src) { dst[0] = '\0'; return; }
+        size_t i = 0;
+        while (i < dstSize - 1 && src[i] != '\0') {
+            dst[i] = src[i];
+            i++;
+        }
+        dst[i] = '\0';
+    }
+
     static std::vector<Enemy> BuildEnemies() {
         std::vector<Enemy> out;
 
@@ -459,9 +470,7 @@ namespace CombatShared {
             for (int j = 0; j < ctrlCount; j++) {
                 if (controllers[j].pawn == entity) {
                     e.controller = controllers[j].entity;
-                    if (controllers[j].name[0] != '\0') {
-                        e.name.assign(controllers[j].name);
-                    }
+                    CopyStringSafe(e.name, sizeof(e.name), controllers[j].name);
                     break;
                 }
             }
@@ -504,7 +513,7 @@ namespace CombatShared {
                         int ammo = 0;
                         int maxAmmo = 0;
                         if (ReadWeaponDataRaw(weapon, wName, sizeof(wName), &ammo, &maxAmmo)) {
-                            e.weaponName.assign(wName);
+                            CopyStringSafe(e.weaponName, sizeof(e.weaponName), wName);
                             e.ammo = ammo;
                             e.maxAmmo = maxAmmo;
                             e.hasWeapon = true;
@@ -521,7 +530,7 @@ namespace CombatShared {
                 e.visible = false;
             }
 
-            out.push_back(std::move(e));
+            out.push_back(e);
         }
 
         return out;

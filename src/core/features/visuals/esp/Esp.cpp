@@ -397,11 +397,11 @@ namespace Esp {
         const CombatShared::Enemy& e, SideOffsets& off)
     {
         if (g_nameEnabled == 0) return;
-        if (e.name.empty()) return;
+        if (e.name[0] == '\0') return;
 
         const int pos = (int)g_namePosition;
 
-        const ImVec2 ts = ImGui::CalcTextSize(e.name.c_str());
+        const ImVec2 ts = ImGui::CalcTextSize(e.name);
         const float x = b.minX + ((b.maxX - b.minX) * 0.5f) - (ts.x * 0.5f);
 
         float y;
@@ -415,7 +415,7 @@ namespace Esp {
         }
 
         const float* col = e.visible ? g_nameColor : g_nameOccludedColor;
-        DrawOutlinedText(dl, x, y, e.name.c_str(), ToU32(col));
+        DrawOutlinedText(dl, x, y, e.name, ToU32(col));
     }
 
     static void DrawBoneDebug(ImDrawList* dl, const CombatShared::Enemy& e) {
