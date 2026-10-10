@@ -30,7 +30,7 @@ public:
     char _value_tail[0x8];
 
     template <typename T>
-    T Get() const {
+    T get() const {
         if constexpr (std::is_same_v<T, bool>) return m_value.b;
         else if constexpr (std::is_same_v<T, short>) return m_value.s;
         else if constexpr (std::is_same_v<T, int>) return m_value.i;
@@ -38,6 +38,9 @@ public:
         else if constexpr (std::is_same_v<T, float>) return m_value.f;
         else return T{};
     }
+
+    template <typename T>
+    T Get() const { return this->get<T>(); }
 
     void Set(bool v) { m_value.b = v; }
     void Set(short v) { m_value.s = v; }
@@ -93,3 +96,5 @@ namespace CVar {
 
     void DumpMatching(const char* substring);
 }
+
+#define CONVAR(name) ::CVar::Find(name)

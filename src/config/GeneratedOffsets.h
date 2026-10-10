@@ -4,15 +4,15 @@
 namespace GeneratedOffsets {
 
     namespace Globals {
-        constexpr uintptr_t dwEntityList = 0x2717828;
-        constexpr uintptr_t dwLocalPlayerController = 0x253A068;
-        constexpr uintptr_t dwLocalPlayerPawn = 0x2562808;
-        constexpr uintptr_t dwViewMatrix = 0x2567FA0;
-        constexpr uintptr_t dwGlobalVars = 0x222DE98;
-        constexpr uintptr_t dwGameRules = 0x255EE50;
+        constexpr uintptr_t dwEntityList = 0x2711598;
+        constexpr uintptr_t dwLocalPlayerController = 0x25338A8;
+        constexpr uintptr_t dwLocalPlayerPawn = 0x255C3C8;
+        constexpr uintptr_t dwViewMatrix = 0x2561CD0;
+        constexpr uintptr_t dwGlobalVars = 0x2228090;
+        constexpr uintptr_t dwGameRules = 0x255BE80;
         constexpr uintptr_t dwInputSystem = 0x46BC0;
-        constexpr uintptr_t dwCSGOInput = 0x2578160;
-        constexpr uintptr_t dwViewAngles = 0x25787E8;
+        constexpr uintptr_t dwCSGOInput = 0x2572460;
+        constexpr uintptr_t dwViewAngles = 0x2572AE8;
     }
 
     namespace Fields {
@@ -30,9 +30,10 @@ namespace GeneratedOffsets {
         constexpr uint32_t m_bPawnIsAlive = 0x934;
         constexpr uint32_t m_fFlags = 0x3F4;
         constexpr uint32_t m_vecAbsVelocity = 0x3F8;
-        constexpr uint32_t m_angEyeAngles = 0x35F0;
+        constexpr uint32_t m_angEyeAngles = 0x3600;
         constexpr uint32_t m_pAimPunchServices = 0x1598;
         constexpr uint32_t m_pWeaponServices = 0x12F0;
+        constexpr uint32_t m_pMovementServices = 0x1330;
         constexpr uint32_t m_hActiveWeapon = 0x60;
         constexpr uint32_t m_modelState = 0x140;
         constexpr uint32_t m_pCollision = 0x340;

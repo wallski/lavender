@@ -34,6 +34,7 @@ namespace OffsetConfig {
         uint32_t m_angEyeAngles = 0;
         uint32_t m_pAimPunchServices = 0;
         uint32_t m_pWeaponServices = 0;
+        uint32_t m_pMovementServices = 0;
         uint32_t m_hActiveWeapon = 0;
         uint32_t m_modelState = 0;
         uint32_t m_pCollision = 0;

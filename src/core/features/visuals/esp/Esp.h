@@ -28,8 +28,10 @@ namespace Esp {
     void SetBoxCornerLength(float length);
 
     float* GetBoxVisibleColor();
+    float* GetBoxOccludedColor();
     float* GetBoxFillColor();
     void SetBoxVisibleColor(const float color[4]);
+    void SetBoxOccludedColor(const float color[4]);
     void SetBoxFillColor(const float color[4]);
 
     bool IsHealthEnabled();
@@ -76,13 +78,17 @@ namespace Esp {
     void SetNamePosition(int position);
 
     float* GetNameColor();
+    float* GetNameOccludedColor();
     void SetNameColor(const float color[4]);
+    void SetNameOccludedColor(const float color[4]);
 
     bool IsSkeletonEnabled();
     void SetSkeletonEnabled(bool enabled);
 
     float* GetSkeletonColor();
+    float* GetSkeletonOccludedColor();
     void SetSkeletonColor(const float color[4]);
+    void SetSkeletonOccludedColor(const float color[4]);
 
     float GetSkeletonThickness();
     void SetSkeletonThickness(float thickness);

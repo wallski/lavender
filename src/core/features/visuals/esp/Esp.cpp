@@ -41,9 +41,11 @@ namespace Esp {
     static volatile LONG g_nameEnabled = 0;
     static volatile LONG g_namePosition = 0;
     static float g_nameColor[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
+    static float g_nameOccludedColor[4] = { 0.850f, 0.500f, 0.500f, 1.00f };
 
     static volatile LONG g_skeletonEnabled = 0;
     static float g_skeletonColor[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+    static float g_skeletonOccludedColor[4] = { 1.000f, 0.400f, 0.400f, 1.00f };
     static float g_skeletonThickness = 1.5f;
     static volatile LONG g_skeletonDebug = 0;
 
@@ -412,7 +414,8 @@ namespace Esp {
             off.bottom += ts.y + 2.0f;
         }
 
-        DrawOutlinedText(dl, x, y, e.name.c_str(), ToU32(g_nameColor));
+        const float* col = e.visible ? g_nameColor : g_nameOccludedColor;
+        DrawOutlinedText(dl, x, y, e.name.c_str(), ToU32(col));
     }
 
     static void DrawBoneDebug(ImDrawList* dl, const CombatShared::Enemy& e) {
@@ -466,7 +469,8 @@ namespace Esp {
             { 20, 21 },
         };
 
-        const ImU32 color = ToU32(g_skeletonColor);
+        const float* skelCol = e.visible ? g_skeletonColor : g_skeletonOccludedColor;
+        const ImU32 color = ToU32(skelCol);
         const ImU32 outline = IM_COL32(0, 0, 0, 200);
         constexpr int kPairCount = (int)(sizeof(kPairs) / sizeof(kPairs[0]));
         const float thick = g_skeletonThickness;
@@ -579,6 +583,7 @@ namespace Esp {
     }
 
     float* GetBoxVisibleColor() { return g_boxVisibleColor; }
+    float* GetBoxOccludedColor() { return g_boxOccludedColor; }
     float* GetBoxFillColor() { return g_boxFillColor; }
 
     void SetBoxVisibleColor(const float color[4]) {
@@ -586,6 +591,13 @@ namespace Esp {
         g_boxVisibleColor[1] = color[1];
         g_boxVisibleColor[2] = color[2];
         g_boxVisibleColor[3] = color[3];
+    }
+
+    void SetBoxOccludedColor(const float color[4]) {
+        g_boxOccludedColor[0] = color[0];
+        g_boxOccludedColor[1] = color[1];
+        g_boxOccludedColor[2] = color[2];
+        g_boxOccludedColor[3] = color[3];
     }
 
     void SetBoxFillColor(const float color[4]) {
@@ -686,6 +698,8 @@ namespace Esp {
     }
 
     float* GetNameColor() { return g_nameColor; }
+    float* GetNameOccludedColor() { return g_nameOccludedColor; }
+
     void SetNameColor(const float color[4]) {
         g_nameColor[0] = color[0];
         g_nameColor[1] = color[1];
@@ -693,15 +707,31 @@ namespace Esp {
         g_nameColor[3] = color[3];
     }
 
+    void SetNameOccludedColor(const float color[4]) {
+        g_nameOccludedColor[0] = color[0];
+        g_nameOccludedColor[1] = color[1];
+        g_nameOccludedColor[2] = color[2];
+        g_nameOccludedColor[3] = color[3];
+    }
+
     bool IsSkeletonEnabled() { return g_skeletonEnabled != 0; }
     void SetSkeletonEnabled(bool enabled) { InterlockedExchange(&g_skeletonEnabled, enabled ? 1 : 0); }
 
     float* GetSkeletonColor() { return g_skeletonColor; }
+    float* GetSkeletonOccludedColor() { return g_skeletonOccludedColor; }
+
     void SetSkeletonColor(const float color[4]) {
         g_skeletonColor[0] = color[0];
         g_skeletonColor[1] = color[1];
         g_skeletonColor[2] = color[2];
         g_skeletonColor[3] = color[3];
+    }
+
+    void SetSkeletonOccludedColor(const float color[4]) {
+        g_skeletonOccludedColor[0] = color[0];
+        g_skeletonOccludedColor[1] = color[1];
+        g_skeletonOccludedColor[2] = color[2];
+        g_skeletonOccludedColor[3] = color[3];
     }
 
     float GetSkeletonThickness() { return g_skeletonThickness; }

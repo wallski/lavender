@@ -187,6 +187,7 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\core\features\combat\Lagcomp.cpp" />
     <ClCompile Include="src\core\features\visuals\bombtimer\BombTimer.cpp" />
     <ClCompile Include="src\config\OffsetConfig.cpp" />
     <ClCompile Include="src\core\config\ConfigManager.cpp" />
@@ -209,8 +210,16 @@
     </ClCompile>
     <ClCompile Include="src\core\hooks\VmtHook.cpp" />
     <ClCompile Include="src\core\input\InputHelper.cpp" />
+    <ClCompile Include="src\core\math\math.cpp" />
     <ClCompile Include="src\core\memory\OffsetManager.cpp" />
     <ClCompile Include="src\core\memory\PatternScan.cpp" />
+    <ClCompile Include="src\core\systems\bones\Bones.cpp" />
+    <ClCompile Include="src\core\systems\entities\Entities.cpp" />
+    <ClCompile Include="src\core\systems\hitboxes\Hitboxes.cpp" />
+    <ClCompile Include="src\core\systems\local\Local.cpp" />
+    <ClCompile Include="src\core\systems\prediction\Prediction.cpp" />
+    <ClCompile Include="src\core\systems\schemas\Schemas.cpp" />
+    <ClCompile Include="src\core\systems\Tracing.cpp" />
     <ClCompile Include="src\dllmain.cpp" />
     <ClCompile Include="src\pch.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
@@ -268,8 +277,10 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">NotUsing</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">NotUsing</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="src\core\systems\view\View.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\core\features\combat\Lagcomp.h" />
     <ClInclude Include="src\core\features\visuals\bombtimer\BombTimer.h" />
     <ClInclude Include="src\config\OffsetConfig.h" />
     <ClInclude Include="src\core\config\ConfigManager.h" />
@@ -290,9 +301,21 @@
     <ClInclude Include="src\core\hooks\VmtHook.h" />
     <ClInclude Include="src\core\input\InputHelper.h" />
     <ClInclude Include="src\core\interfaces\InterfaceManager.h" />
+    <ClInclude Include="src\core\math\hash.hpp" />
+    <ClInclude Include="src\core\math\math.hpp" />
     <ClInclude Include="src\core\memory\OffsetManager.h" />
     <ClInclude Include="src\core\memory\PatternScan.h" />
     <ClInclude Include="src\core\memory\Proto.h" />
+    <ClInclude Include="src\core\systems\bones\Bones.h" />
+    <ClInclude Include="src\core\systems\cstypes.hpp" />
+    <ClInclude Include="src\core\systems\entities\Entities.h" />
+    <ClInclude Include="src\core\systems\hitboxes\Hitboxes.h" />
+    <ClInclude Include="src\core\systems\local\Local.h" />
+    <ClInclude Include="src\core\systems\prediction\Prediction.h" />
+    <ClInclude Include="src\core\systems\schemas\Schemas.h" />
+    <ClInclude Include="src\core\systems\systems.hpp" />
+    <ClInclude Include="src\core\systems\Tracing.h" />
+    <ClInclude Include="src\core\systems\view\View.h" />
     <ClInclude Include="src\pch.h" />
     <ClInclude Include="src\render\Menu.h" />
     <ClInclude Include="src\render\Renderer.h" />

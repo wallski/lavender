@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Chams.h"
 #include "../../../../config/OffsetConfig.h"
+#include <atomic>
 
 static volatile LONG g_enabled = 0;
 static volatile LONG g_teamCheck = 0;
@@ -134,12 +135,6 @@ namespace Chams {
 
         for (uint32_t i = 0; i < count; i++) {
             uintptr_t prim = arr + (uintptr_t)i * 0x70;
-
-            uintptr_t slotA = __TryReadPtr(prim + 0x20);
-            uintptr_t slotB = __TryReadPtr(prim + 0x28);
-            if (slotA < 0x10000 || slotA > 0x00007FFFFFFFFFFF) continue;
-            if (slotB < 0x10000 || slotB > 0x00007FFFFFFFFFFF) continue;
-            if (slotA != slotB) continue;
 
             uintptr_t sceneObj = __TryReadPtr(prim + 0x18);
             if (!sceneObj) continue;

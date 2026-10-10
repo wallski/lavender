@@ -50,33 +50,19 @@ namespace Removals {
         const char* sig = "5C 24 28 48 89 44 24 20 E8 ? ? ? ? 48 8B 5C 24 60";
 
         uintptr_t match = Memory::FindPattern("client.dll", sig);
-        if (!match) {
-            printf("[removals] render_smoke pattern not found\n");
-            fflush(stdout);
-            return false;
-        }
+        if (!match) return false;
 
         uintptr_t e8 = match + 8;
         int32_t rel = 0;
         if (!SafeReadI32(e8 + 1, &rel)) return false;
 
         uintptr_t fn = e8 + 5 + (intptr_t)rel;
-        if (!IsValidPtr(fn)) {
-            printf("[removals] render_smoke target invalid: 0x%llX\n", (unsigned long long)fn);
-            fflush(stdout);
-            return false;
-        }
+        if (!IsValidPtr(fn)) return false;
 
         uint8_t prologue[8] = {};
         for (int i = 0; i < 8; i++) {
             if (!SafeReadByte(fn + i, &prologue[i])) return false;
         }
-
-        printf("[removals] render_smoke=0x%llX prologue=%02X %02X %02X %02X %02X %02X %02X %02X\n",
-            (unsigned long long)fn,
-            prologue[0], prologue[1], prologue[2], prologue[3],
-            prologue[4], prologue[5], prologue[6], prologue[7]);
-        fflush(stdout);
 
         g_renderSmokeFn = fn;
         g_renderSmokeOriginal = prologue[0];

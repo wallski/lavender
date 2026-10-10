@@ -2,11 +2,14 @@
 #include "config/OffsetConfig.h"
 #include "core/config/ConfigManager.h"
 #include "core/hooks/PresentHook.h"
+#include "core/systems/systems.hpp"
+#include "core/systems/Tracing.h"
 #include "core/hooks/CreateMoveHook.h"
 #include "core/input/InputHelper.h"
 #include "core/interfaces/InterfaceManager.h"
 #include "core/memory/PatternScan.h"
 #include "core/cvar/CVar.h"
+#include "core/systems/schemas/Schemas.h"
 #include "core/features/visuals/chams/Chams.h"
 #include "core/features/visuals/chams/Materials.h"
 #include "core/features/visuals/esp/Esp.h"
@@ -14,6 +17,7 @@
 #include "core/features/visuals/removals/Removals.h"
 #include "core/features/visuals/bombtimer/BombTimer.h"
 #include "core/features/combat/CombatShared.h"
+#include "core/features/combat/Lagcomp.h"
 #include "core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "core/features/combat/legit/aim/Aim.h"
 #include "render/Renderer.h"
@@ -177,7 +181,13 @@ void MainThread(HMODULE hModule) {
     if (!Skybox::Initialize())    Log("[Lavender] Skybox failed (feature disabled)\n");
 
     CVar::Initialize();
+    systems::schemas::Initialize();
     CombatShared::Initialize();
+
+    if (!Tracing::Initialize()) {
+        Log("[Lavender] Tracing failed (some sigs dead)\n");
+    }
+    Lagcomp::Initialize();
 
     Removals::Initialize();
     BombTimer::Initialize();
@@ -216,7 +226,10 @@ void MainThread(HMODULE hModule) {
     BombTimer::Shutdown();
     Removals::Shutdown();
     RestoreSortHook();
+    Lagcomp::Shutdown();
+    Tracing::Shutdown();
     CombatShared::Shutdown();
+    systems::schemas::Shutdown();
     CVar::Shutdown();
     Esp::Shutdown();
     Skybox::Shutdown();

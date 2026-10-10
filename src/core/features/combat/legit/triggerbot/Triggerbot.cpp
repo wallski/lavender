@@ -5,6 +5,7 @@
 #include "../../../../../core/hooks/CreateMoveHook.h"
 #include "../../../../../config/OffsetConfig.h"
 #include "../../../../../render/Renderer.h"
+#include "../../../../../core/systems/Tracing.h"
 #include <cmath>
 #include <atomic>
 
@@ -121,40 +122,62 @@ namespace Triggerbot {
         return t;
     }
 
-    static bool CheckBone(const Vec3& bonePos, float cx, float cy, float radius) {
-        Vec3 screen;
-        if (!CombatShared::WorldToScreen(bonePos, screen)) return false;
-        float dx = screen.x - cx;
-        float dy = screen.y - cy;
-        return (dx * dx + dy * dy) < radius * radius;
+    static bool IsClearToBone(uintptr_t localPawn, uintptr_t targetPawn, const Vec3& bonePos) {
+        Vec3 eye;
+        if (!CombatShared::GetEyePosition(localPawn, eye)) return false;
+
+        const math::vector3 from{ eye.x, eye.y, eye.z };
+        const math::vector3 to{ bonePos.x, bonePos.y, bonePos.z };
+
+        auto filter = Tracing::MakeFilter(localPawn, 0x1c3003, 4);
+        auto result = Tracing::Trace(from, to, filter);
+
+        if (result.fraction >= 0.97f) return true;
+        if (result.hitEntity == targetPawn) return true;
+        return false;
     }
 
-    static bool CheckEnemy(const CombatShared::Enemy& e, uint32_t hb, float cx, float cy) {
+    static bool CheckBone(uintptr_t localPawn, uintptr_t targetPawn,
+        const Vec3& bonePos, float cx, float cy, float radius)
+    {
+        Vec3 screen;
+        if (!CombatShared::WorldToScreen(bonePos, screen)) return false;
+
+        const float dx = screen.x - cx;
+        const float dy = screen.y - cy;
+        if ((dx * dx + dy * dy) >= radius * radius) return false;
+
+        return IsClearToBone(localPawn, targetPawn, bonePos);
+    }
+
+    static bool CheckEnemy(uintptr_t localPawn, const CombatShared::Enemy& e,
+        uint32_t hb, float cx, float cy)
+    {
         constexpr float rHead = 8.0f;
         constexpr float rChest = 14.0f;
         constexpr float rStomach = 12.0f;
         constexpr float rPelvis = 12.0f;
         constexpr float rLimb = 10.0f;
 
-        if ((hb & HB_HEAD) && CheckBone(e.headPos, cx, cy, rHead)) return true;
-        if ((hb & HB_NECK) && CheckBone(e.neckPos, cx, cy, rHead)) return true;
+        if ((hb & HB_HEAD) && CheckBone(localPawn, e.pawn, e.headPos, cx, cy, rHead)) return true;
+        if ((hb & HB_NECK) && CheckBone(localPawn, e.pawn, e.neckPos, cx, cy, rHead)) return true;
 
         if (hb & HB_CHEST) {
-            if (CheckBone(e.chestPos, cx, cy, rChest)) return true;
-            if (CheckBone(e.stomachPos, cx, cy, rChest)) return true;
+            if (CheckBone(localPawn, e.pawn, e.chestPos, cx, cy, rChest)) return true;
+            if (CheckBone(localPawn, e.pawn, e.stomachPos, cx, cy, rChest)) return true;
         }
 
-        if ((hb & HB_STOMACH) && CheckBone(e.stomachPos, cx, cy, rStomach)) return true;
-        if ((hb & HB_PELVIS) && CheckBone(e.pelvisPos, cx, cy, rPelvis)) return true;
+        if ((hb & HB_STOMACH) && CheckBone(localPawn, e.pawn, e.stomachPos, cx, cy, rStomach)) return true;
+        if ((hb & HB_PELVIS) && CheckBone(localPawn, e.pawn, e.pelvisPos, cx, cy, rPelvis)) return true;
 
         if (hb & HB_ARMS) {
-            if (CheckBone(e.leftArmPos, cx, cy, rLimb)) return true;
-            if (CheckBone(e.rightArmPos, cx, cy, rLimb)) return true;
+            if (CheckBone(localPawn, e.pawn, e.leftArmPos, cx, cy, rLimb)) return true;
+            if (CheckBone(localPawn, e.pawn, e.rightArmPos, cx, cy, rLimb)) return true;
         }
 
         if (hb & HB_LEGS) {
-            if (CheckBone(e.leftLegPos, cx, cy, rLimb)) return true;
-            if (CheckBone(e.rightLegPos, cx, cy, rLimb)) return true;
+            if (CheckBone(localPawn, e.pawn, e.leftLegPos, cx, cy, rLimb)) return true;
+            if (CheckBone(localPawn, e.pawn, e.rightLegPos, cx, cy, rLimb)) return true;
         }
 
         return false;
@@ -203,9 +226,8 @@ namespace Triggerbot {
 
         bool hasTarget = false;
         for (const auto& e : enemies) {
-            if (!e.visible) continue;
             if (teamCheck != 0 && e.team == localTeam) continue;
-            if (CheckEnemy(e, hb, cx, cy)) {
+            if (CheckEnemy(localPawn, e, hb, cx, cy)) {
                 hasTarget = true;
                 break;
             }

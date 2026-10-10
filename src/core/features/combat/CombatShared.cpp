@@ -2,6 +2,8 @@
 #include "CombatShared.h"
 #include "../../../config/OffsetConfig.h"
 #include "../../../core/memory/PatternScan.h"
+#include "../../systems/Tracing.h"
+#include "../../math/math.hpp"
 #include <cmath>
 
 namespace CombatShared {
@@ -235,8 +237,17 @@ namespace CombatShared {
     }
 
     bool IsVisible(const Vec3& start, const Vec3& end, uintptr_t skipEntity, uintptr_t targetEntity) {
-        (void)start; (void)end; (void)skipEntity; (void)targetEntity;
-        return true;
+        if (!targetEntity) return false;
+
+        const math::vector3 s{ start.x, start.y, start.z };
+        const math::vector3 e{ end.x, end.y, end.z };
+
+        auto filter = Tracing::MakeFilter(skipEntity, 0x1c3003, 4);
+        auto result = Tracing::Trace(s, e, filter);
+
+        if (result.fraction >= 0.97f) return true;
+        if (result.hitEntity == targetEntity) return true;
+        return false;
     }
 
     static bool ReadTeamRaw(uintptr_t entity, int* out) {
@@ -501,8 +512,11 @@ namespace CombatShared {
             }
 
             Vec3 eye;
-            if (GetEyePosition(localPawn, eye)) {
+            if (GetEyePosition(localPawn, eye) && e.headPos.Length() > 1.0f) {
                 e.visible = IsVisible(eye, e.headPos, localPawn, entity);
+            }
+            else {
+                e.visible = false;
             }
 
             out.push_back(std::move(e));

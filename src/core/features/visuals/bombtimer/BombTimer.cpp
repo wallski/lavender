@@ -70,19 +70,12 @@ namespace BombTimer {
         const char* sig = "48 8B 1D ? ? ? ? 48 8B D3 4C 8B 81";
 
         uintptr_t match = Memory::FindPattern("client.dll", sig);
-        if (!match) {
-            printf("[bombtimer] C4 pattern not found\n");
-            fflush(stdout);
-            return false;
-        }
+        if (!match) return false;
 
         int32_t rel = 0;
         if (!SafeReadI32(match + 3, &rel)) return false;
 
         uintptr_t globalAddr = match + 7 + (intptr_t)rel;
-
-        printf("[bombtimer] C4 global=0x%llX\n", (unsigned long long)globalAddr);
-        fflush(stdout);
 
         g_c4GlobalAddr = globalAddr;
         return true;

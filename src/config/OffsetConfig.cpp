@@ -50,6 +50,7 @@ namespace OffsetConfig {
         fields.m_angEyeAngles = GeneratedOffsets::Fields::m_angEyeAngles;
         fields.m_pAimPunchServices = GeneratedOffsets::Fields::m_pAimPunchServices;
         fields.m_pWeaponServices = GeneratedOffsets::Fields::m_pWeaponServices;
+        fields.m_pMovementServices = GeneratedOffsets::Fields::m_pMovementServices;
         fields.m_hActiveWeapon = GeneratedOffsets::Fields::m_hActiveWeapon;
         fields.m_modelState = GeneratedOffsets::Fields::m_modelState;
         fields.m_pCollision = GeneratedOffsets::Fields::m_pCollision;
@@ -113,7 +114,6 @@ namespace OffsetConfig {
         globals.dwCSGOInput += clientBase;
         globals.dwViewAngles += clientBase;
 
-        // dwGlobalVars: ambiguous module in CS2 builds. Try engine first, fall back to client.
         {
             uintptr_t rva = globals.dwGlobalVars;
             uintptr_t engineCandidate = rva + engineBase;

@@ -106,6 +106,7 @@ $fieldNames = @(
     "m_angEyeAngles",
     "m_pAimPunchServices",
     "m_pWeaponServices",
+    "m_pMovementServices",
     "m_hActiveWeapon",
     "m_modelState",
     "m_pCollision",
@@ -124,8 +125,8 @@ $fieldNames = @(
 )
 
 $specialFields = @{
-    "m_hPlayerPawn" = @{ Namespace = "CCSPlayerController"; Name = "m_hPlayerPawn" }
-    "m_bPawnIsAlive" = @{ Namespace = "CCSPlayerController"; Name = "m_bPawnIsAlive" }
+    "m_hPlayerPawn"          = @{ Namespace = "CCSPlayerController"; Name = "m_hPlayerPawn" }
+    "m_bPawnIsAlive"         = @{ Namespace = "CCSPlayerController"; Name = "m_bPawnIsAlive" }
     "m_sSanitizedPlayerName" = @{ Namespace = "CCSPlayerController"; Name = "m_sSanitizedPlayerName" }
 }
 

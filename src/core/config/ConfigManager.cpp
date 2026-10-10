@@ -123,6 +123,11 @@ namespace ConfigManager {
         f << "esp.box_visible_g=" << vc[1] << "\n";
         f << "esp.box_visible_b=" << vc[2] << "\n";
         f << "esp.box_visible_a=" << vc[3] << "\n";
+        const float* oc = Esp::GetBoxOccludedColor();
+        f << "esp.box_occluded_r=" << oc[0] << "\n";
+        f << "esp.box_occluded_g=" << oc[1] << "\n";
+        f << "esp.box_occluded_b=" << oc[2] << "\n";
+        f << "esp.box_occluded_a=" << oc[3] << "\n";
         const float* fc = Esp::GetBoxFillColor();
         f << "esp.box_fill_r=" << fc[0] << "\n";
         f << "esp.box_fill_g=" << fc[1] << "\n";
@@ -167,6 +172,11 @@ namespace ConfigManager {
         f << "esp.name_color_g=" << nc[1] << "\n";
         f << "esp.name_color_b=" << nc[2] << "\n";
         f << "esp.name_color_a=" << nc[3] << "\n";
+        const float* noc = Esp::GetNameOccludedColor();
+        f << "esp.name_occluded_r=" << noc[0] << "\n";
+        f << "esp.name_occluded_g=" << noc[1] << "\n";
+        f << "esp.name_occluded_b=" << noc[2] << "\n";
+        f << "esp.name_occluded_a=" << noc[3] << "\n";
 
         f << "esp.skeleton_enabled=" << (Esp::IsSkeletonEnabled() ? 1 : 0) << "\n";
         const float* sc = Esp::GetSkeletonColor();
@@ -174,6 +184,11 @@ namespace ConfigManager {
         f << "esp.skeleton_color_g=" << sc[1] << "\n";
         f << "esp.skeleton_color_b=" << sc[2] << "\n";
         f << "esp.skeleton_color_a=" << sc[3] << "\n";
+        const float* soc = Esp::GetSkeletonOccludedColor();
+        f << "esp.skeleton_occluded_r=" << soc[0] << "\n";
+        f << "esp.skeleton_occluded_g=" << soc[1] << "\n";
+        f << "esp.skeleton_occluded_b=" << soc[2] << "\n";
+        f << "esp.skeleton_occluded_a=" << soc[3] << "\n";
         f << "esp.skeleton_thickness=" << Esp::GetSkeletonThickness() << "\n";
         f << "esp.skeleton_debug=" << (Esp::IsSkeletonDebug() ? 1 : 0) << "\n";
 
@@ -247,6 +262,7 @@ namespace ConfigManager {
         bool espBoxOutline = true;
         float espBoxCornerLength = 8.0f;
         float espBoxVisible[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+        float espBoxOccluded[4] = { 1.000f, 0.400f, 0.400f, 1.00f };
         float espBoxFillColor[4] = { 0.659f, 0.333f, 0.969f, 0.25f };
 
         bool espHealthEnabled = false;
@@ -267,9 +283,11 @@ namespace ConfigManager {
         bool espNameEnabled = false;
         int espNamePosition = 0;
         float espNameColor[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
+        float espNameOccluded[4] = { 0.850f, 0.500f, 0.500f, 1.00f };
 
         bool espSkeletonEnabled = false;
         float espSkeletonColor[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+        float espSkeletonOccluded[4] = { 1.000f, 0.400f, 0.400f, 1.00f };
         float espSkeletonThickness = 1.5f;
         bool espSkeletonDebug = false;
 
@@ -341,6 +359,10 @@ namespace ConfigManager {
             else if (key == "esp.box_visible_g") espBoxVisible[1] = ParseFloat(val, espBoxVisible[1]);
             else if (key == "esp.box_visible_b") espBoxVisible[2] = ParseFloat(val, espBoxVisible[2]);
             else if (key == "esp.box_visible_a") espBoxVisible[3] = ParseFloat(val, espBoxVisible[3]);
+            else if (key == "esp.box_occluded_r") espBoxOccluded[0] = ParseFloat(val, espBoxOccluded[0]);
+            else if (key == "esp.box_occluded_g") espBoxOccluded[1] = ParseFloat(val, espBoxOccluded[1]);
+            else if (key == "esp.box_occluded_b") espBoxOccluded[2] = ParseFloat(val, espBoxOccluded[2]);
+            else if (key == "esp.box_occluded_a") espBoxOccluded[3] = ParseFloat(val, espBoxOccluded[3]);
             else if (key == "esp.box_fill_r") espBoxFillColor[0] = ParseFloat(val, espBoxFillColor[0]);
             else if (key == "esp.box_fill_g") espBoxFillColor[1] = ParseFloat(val, espBoxFillColor[1]);
             else if (key == "esp.box_fill_b") espBoxFillColor[2] = ParseFloat(val, espBoxFillColor[2]);
@@ -379,12 +401,20 @@ namespace ConfigManager {
             else if (key == "esp.name_color_g") espNameColor[1] = ParseFloat(val, espNameColor[1]);
             else if (key == "esp.name_color_b") espNameColor[2] = ParseFloat(val, espNameColor[2]);
             else if (key == "esp.name_color_a") espNameColor[3] = ParseFloat(val, espNameColor[3]);
+            else if (key == "esp.name_occluded_r") espNameOccluded[0] = ParseFloat(val, espNameOccluded[0]);
+            else if (key == "esp.name_occluded_g") espNameOccluded[1] = ParseFloat(val, espNameOccluded[1]);
+            else if (key == "esp.name_occluded_b") espNameOccluded[2] = ParseFloat(val, espNameOccluded[2]);
+            else if (key == "esp.name_occluded_a") espNameOccluded[3] = ParseFloat(val, espNameOccluded[3]);
 
             else if (key == "esp.skeleton_enabled") espSkeletonEnabled = ParseBool(val);
             else if (key == "esp.skeleton_color_r") espSkeletonColor[0] = ParseFloat(val, espSkeletonColor[0]);
             else if (key == "esp.skeleton_color_g") espSkeletonColor[1] = ParseFloat(val, espSkeletonColor[1]);
             else if (key == "esp.skeleton_color_b") espSkeletonColor[2] = ParseFloat(val, espSkeletonColor[2]);
             else if (key == "esp.skeleton_color_a") espSkeletonColor[3] = ParseFloat(val, espSkeletonColor[3]);
+            else if (key == "esp.skeleton_occluded_r") espSkeletonOccluded[0] = ParseFloat(val, espSkeletonOccluded[0]);
+            else if (key == "esp.skeleton_occluded_g") espSkeletonOccluded[1] = ParseFloat(val, espSkeletonOccluded[1]);
+            else if (key == "esp.skeleton_occluded_b") espSkeletonOccluded[2] = ParseFloat(val, espSkeletonOccluded[2]);
+            else if (key == "esp.skeleton_occluded_a") espSkeletonOccluded[3] = ParseFloat(val, espSkeletonOccluded[3]);
             else if (key == "esp.skeleton_thickness") espSkeletonThickness = ParseFloat(val, espSkeletonThickness);
             else if (key == "esp.skeleton_debug") espSkeletonDebug = ParseBool(val);
 
@@ -448,6 +478,7 @@ namespace ConfigManager {
         Esp::SetBoxOutlineEnabled(espBoxOutline);
         Esp::SetBoxCornerLength(espBoxCornerLength);
         Esp::SetBoxVisibleColor(espBoxVisible);
+        Esp::SetBoxOccludedColor(espBoxOccluded);
         Esp::SetBoxFillColor(espBoxFillColor);
 
         Esp::SetHealthEnabled(espHealthEnabled);
@@ -468,9 +499,11 @@ namespace ConfigManager {
         Esp::SetNameEnabled(espNameEnabled);
         Esp::SetNamePosition(espNamePosition);
         Esp::SetNameColor(espNameColor);
+        Esp::SetNameOccludedColor(espNameOccluded);
 
         Esp::SetSkeletonEnabled(espSkeletonEnabled);
         Esp::SetSkeletonColor(espSkeletonColor);
+        Esp::SetSkeletonOccludedColor(espSkeletonOccluded);
         Esp::SetSkeletonThickness(espSkeletonThickness);
         Esp::SetSkeletonDebug(espSkeletonDebug);
 

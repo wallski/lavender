@@ -313,11 +313,13 @@ namespace Menu {
     static void DrawSkeletonCard() {
         bool enabled = Esp::IsSkeletonEnabled();
         float color[4];
+        float occludedColor[4];
         memcpy(color, Esp::GetSkeletonColor(), sizeof(color));
+        memcpy(occludedColor, Esp::GetSkeletonOccludedColor(), sizeof(occludedColor));
         float thickness = Esp::GetSkeletonThickness();
         bool debug = Esp::IsSkeletonDebug();
 
-        int rows = 2;
+        int rows = 3;
         if (enabled) rows += 2;
 
         Widgets::BeginCard("SKELETON", rows);
@@ -325,8 +327,11 @@ namespace Menu {
         if (Widgets::Toggle("Enabled", &enabled)) {
             Esp::SetSkeletonEnabled(enabled);
         }
-        if (Widgets::ColorPicker("Color", color)) {
+        if (Widgets::ColorPicker("Visible color", color)) {
             Esp::SetSkeletonColor(color);
+        }
+        if (Widgets::ColorPicker("Occluded color", occludedColor)) {
+            Esp::SetSkeletonOccludedColor(occludedColor);
         }
         if (enabled) {
             if (Widgets::SliderFloat("Thickness", &thickness, 0.5f, 5.0f, "%.1f")) {
@@ -347,11 +352,13 @@ namespace Menu {
         bool boxOutline = Esp::IsBoxOutlineEnabled();
         float cornerLen = Esp::GetBoxCornerLength();
         float visibleColor[4];
+        float occludedColor[4];
         float fillColor[4];
         memcpy(visibleColor, Esp::GetBoxVisibleColor(), sizeof(visibleColor));
+        memcpy(occludedColor, Esp::GetBoxOccludedColor(), sizeof(occludedColor));
         memcpy(fillColor, Esp::GetBoxFillColor(), sizeof(fillColor));
 
-        int rows = 5;
+        int rows = 6;
         if (boxStyle == 1) rows++;
         if (boxFill) rows++;
 
@@ -386,8 +393,11 @@ namespace Menu {
             }
         }
 
-        if (Widgets::ColorPicker("Box color", visibleColor)) {
+        if (Widgets::ColorPicker("Visible color", visibleColor)) {
             Esp::SetBoxVisibleColor(visibleColor);
+        }
+        if (Widgets::ColorPicker("Occluded color", occludedColor)) {
+            Esp::SetBoxOccludedColor(occludedColor);
         }
 
         Widgets::EndCard();
@@ -499,9 +509,11 @@ namespace Menu {
         int position = Esp::GetNamePosition();
 
         float color[4];
+        float occludedColor[4];
         memcpy(color, Esp::GetNameColor(), sizeof(color));
+        memcpy(occludedColor, Esp::GetNameOccludedColor(), sizeof(occludedColor));
 
-        Widgets::BeginCard("NAME", 3);
+        Widgets::BeginCard("NAME", 4);
 
         if (Widgets::Toggle("Enabled", &enabled)) {
             Esp::SetNameEnabled(enabled);
@@ -509,8 +521,11 @@ namespace Menu {
         if (ImGui::Combo("Position", &position, kNamePositionNames, IM_ARRAYSIZE(kNamePositionNames))) {
             Esp::SetNamePosition(position);
         }
-        if (Widgets::ColorPicker("Color", color)) {
+        if (Widgets::ColorPicker("Visible color", color)) {
             Esp::SetNameColor(color);
+        }
+        if (Widgets::ColorPicker("Occluded color", occludedColor)) {
+            Esp::SetNameOccludedColor(occludedColor);
         }
 
         Widgets::EndCard();

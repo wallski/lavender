@@ -4,6 +4,7 @@
 #include "../triggerbot/Triggerbot.h"
 #include "../../../../../config/OffsetConfig.h"
 #include "../../../../../render/Renderer.h"
+#include "../../../../../core/systems/Tracing.h"
 #include <cmath>
 #include <atomic>
 
@@ -21,7 +22,7 @@ namespace Aim {
     static std::atomic<bool> g_onTargetNow{ false };
     static ULONGLONG g_nextFire = 0;
     static constexpr ULONGLONG kFireCooldownMs = 75;
-    static constexpr float kTightAngleDeg = 3.0f;
+    static constexpr float kTightAngleDeg = 1.5f;
 
     static constexpr uint32_t HB_HEAD = 1u << 0;
     static constexpr uint32_t HB_NECK = 1u << 1;
@@ -71,6 +72,21 @@ namespace Aim {
         if ((mask & HB_CHEST) && e.chestPos.Length() > 1.0f) { out = e.chestPos; return true; }
         if ((mask & HB_STOMACH) && e.stomachPos.Length() > 1.0f) { out = e.stomachPos; return true; }
         if ((mask & HB_PELVIS) && e.pelvisPos.Length() > 1.0f) { out = e.pelvisPos; return true; }
+        return false;
+    }
+
+    static bool IsClearToBone(uintptr_t localPawn, uintptr_t targetPawn, const Vec3& bonePos) {
+        Vec3 eye;
+        if (!CombatShared::GetEyePosition(localPawn, eye)) return false;
+
+        const math::vector3 from{ eye.x, eye.y, eye.z };
+        const math::vector3 to{ bonePos.x, bonePos.y, bonePos.z };
+
+        auto filter = Tracing::MakeFilter(localPawn, 0x1c3003, 4);
+        auto result = Tracing::Trace(from, to, filter);
+
+        if (result.fraction >= 0.97f) return true;
+        if (result.hitEntity == targetPawn) return true;
         return false;
     }
 
@@ -206,12 +222,21 @@ namespace Aim {
 
         WriteViewAngles(finalAngles);
 
-        {
-            Vec3 checkDelta = targetAngles - finalAngles;
-            CombatShared::NormalizeAngles(checkDelta);
-            const float checkDist = std::sqrt(checkDelta.x * checkDelta.x + checkDelta.y * checkDelta.y);
-            g_onTargetNow.store(checkDist <= kTightAngleDeg);
+        Vec3 checkDelta = targetAngles - finalAngles;
+        CombatShared::NormalizeAngles(checkDelta);
+        const float checkDist = std::sqrt(checkDelta.x * checkDelta.x + checkDelta.y * checkDelta.y);
+
+        if (checkDist > kTightAngleDeg) {
+            g_onTargetNow.store(false);
+            return;
         }
+
+        if (!IsClearToBone(localPawn, bestEnemy->pawn, bestBone)) {
+            g_onTargetNow.store(false);
+            return;
+        }
+
+        g_onTargetNow.store(true);
     }
 
     bool IsEnabled() { return g_enabled != 0; }

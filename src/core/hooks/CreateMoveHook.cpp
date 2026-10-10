@@ -240,27 +240,15 @@ namespace CreateMoveHook {
         g_getUsercmdFn = Memory::FindPattern("client.dll",
             "40 53 48 83 EC 20 8B DA E8 ?? ?? ?? ?? 4C 8B C0");
 
-        if (!g_getUsercmdBaseFn || !g_getUsercmdFn) {
-            printf("[cm] usercmd sigs missing\n");
-            fflush(stdout);
-            return false;
-        }
+        if (!g_getUsercmdBaseFn || !g_getUsercmdFn) return false;
 
         uintptr_t fn = ResolveCreateMove();
-        if (!fn) {
-            printf("[cm] create_move pattern not found\n");
-            fflush(stdout);
-            return false;
-        }
+        if (!fn) return false;
 
-        if (!InstallHook(fn)) {
-            printf("[cm] hook install FAILED\n");
-            fflush(stdout);
-            return false;
-        }
+        if (!InstallHook(fn)) return false;
 
         g_hookFn = fn;
-        printf("[cm] hook installed at 0x%llX\n", (unsigned long long)fn);
+        printf("[CreateMove] hook ready\n");
         fflush(stdout);
         return true;
     }

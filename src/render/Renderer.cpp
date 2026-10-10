@@ -10,8 +10,10 @@
 #include "../core/features/visuals/removals/Removals.h"
 #include "../core/features/visuals/bombtimer/BombTimer.h"
 #include "../core/features/combat/CombatShared.h"
+#include "../core/features/combat/Lagcomp.h"
 #include "../core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "../core/features/combat/legit/aim/Aim.h"
+#include "../core/systems/systems.hpp"
 #include "../config/OffsetConfig.h"
 
 LRESULT WINAPI ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
@@ -218,6 +220,30 @@ namespace Renderer {
 
         UpdateMouseState();
         CombatShared::BeginFrame();
+
+        systems::g_entities.force_update();
+        systems::g_local.update();
+
+        Lagcomp::Run();
+
+        {
+            const auto s = systems::g_local.get();
+            if (s.is_alive && s.pawn) {
+                const auto movement_services = [&]() -> std::uintptr_t {
+                    __try {
+                        return *reinterpret_cast<std::uintptr_t*>(s.pawn + OffsetConfig::fields.m_pMovementServices);
+                    }
+                    __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+                    }();
+                systems::g_prediction.capture_prestate(s.pawn, movement_services);
+            }
+            else {
+                systems::g_prediction.capture_prestate(0, 0);
+            }
+        }
+
+        systems::g_view.update_matrix();
+
         Removals::Update();
         BombTimer::Update();
 
