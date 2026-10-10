@@ -37,6 +37,12 @@ namespace Renderer {
     static bool g_hasSavedInputSystem = false;
     static uint8_t g_savedInputSystemRelative = 1;
 
+    static volatile LONG g_useLagcomp = 0;
+
+    void SetLagcompActive(bool active) {
+        InterlockedExchange(&g_useLagcomp, active ? 1 : 0);
+    }
+
     static bool IsValidPointer(uintptr_t p) {
         return p >= 0x10000 && p <= 0x00007FFFFFFFFFFF;
     }
@@ -224,7 +230,9 @@ namespace Renderer {
         systems::g_entities.force_update();
         systems::g_local.update();
 
-        Lagcomp::Run();
+        if (g_useLagcomp != 0) {
+            Lagcomp::Run();
+        }
 
         {
             const auto s = systems::g_local.get();

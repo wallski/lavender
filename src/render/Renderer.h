@@ -12,4 +12,6 @@ namespace Renderer {
     bool ShouldUnload();
     int  GetMenuKey();
     void SetMenuKey(int key);
+
+    void SetLagcompActive(bool active);
 }

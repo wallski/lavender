@@ -91,9 +91,7 @@ namespace Skybox {
         uintptr_t pawn = SafeReadLocalPawn();
         if (!pawn) return false;
         if (SafeReadCurtime() < 5.0f) return false;
-        int health = 0;
-        SafeReadI32(pawn + OffsetConfig::fields.m_iHealth, &health);
-        return health > 0 && health <= 200;
+        return true;
     }
 
     static uint32_t HashPath(const char* s) {
@@ -364,7 +362,6 @@ namespace Skybox {
 
         g_resource_system = (uintptr_t)InterfaceManager::Get<void>("resourcesystem.dll", "ResourceSystem013");
         if (!g_resource_system) {
-            printf("[Skybox] ResourceSystem013 not found\n");
             return false;
         }
 
@@ -374,35 +371,31 @@ namespace Skybox {
             "40 53 55 57 48 81 EC 80 00 00 00");
 
         if (!g_fn_init_path_buffer || !g_fn_precache_resource) {
-            printf("[Skybox] precache patterns not found\n");
             return false;
         }
 
         uintptr_t draw_fn = Memory::FindPattern("scenesystem.dll",
             "45 85 C9 0F 8E ? ? ? ? 4C 8B DC");
         if (!draw_fn) {
-            printf("[Skybox] draw_skybox_array pattern not found\n");
             return false;
         }
         g_draw_hook_fn = draw_fn;
         if (!InstallSkyboxDrawHook(draw_fn)) {
-            printf("[Skybox] draw hook install failed\n");
             return false;
         }
 
         uintptr_t fsn_fn = Memory::FindPattern("client.dll",
             "48 89 5C 24 18 48 89 6C 24 20 57 48 83 EC 40 48 8B F9");
         if (!fsn_fn) {
-            printf("[Skybox] frame_stage_notify pattern not found\n");
             return false;
         }
         g_fsn_hook_fn = fsn_fn;
         if (!InstallFSNHook(fsn_fn)) {
-            printf("[Skybox] fsn hook install failed\n");
             return false;
         }
 
-        printf("[Skybox] Ready (lazy precache).\n");
+        printf("[Skybox] ready\n");
+        fflush(stdout);
         return true;
     }
 
@@ -419,19 +412,8 @@ namespace Skybox {
             return;
         }
 
-        printf("[Skybox] Building '%s' on demand\n", g_entries[req].name.c_str());
-        fflush(stdout);
-
         uintptr_t mat = TryBuildMaterial(g_entries[req].path.c_str());
         g_materials[req] = mat;
-
-        if (mat) {
-            printf("[Skybox] Compiled %s\n", g_entries[req].name.c_str());
-        }
-        else {
-            printf("[Skybox] Failed to compile %s\n", g_entries[req].name.c_str());
-        }
-        fflush(stdout);
 
         InterlockedExchange(&s_building, 0);
     }
@@ -485,7 +467,7 @@ namespace Skybox {
         uintptr_t existingMat = 0;
         if (!SafeReadPtr(wrapper + 0xD0, &existingMat)) return;
         if (existingMat < 0x10000 || existingMat > 0x00007FFFFFFFFFFF) return;
-            
+
         if (g_savedExistingMatAddr == 0) {
             uintptr_t inner = 0;
             if (!SafeReadPtr(existingMat, &inner)) return;
