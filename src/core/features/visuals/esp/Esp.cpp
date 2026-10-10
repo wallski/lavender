@@ -522,7 +522,7 @@ namespace Esp {
 
         const int localTeam = ReadTeam(localPawn);
 
-        const auto& enemies = CombatShared::GetEnemiesCached();
+        const auto enemies = CombatShared::GetEnemiesCached();
         if (enemies.empty()) return;
 
         ImDrawList* dl = ImGui::GetBackgroundDrawList();

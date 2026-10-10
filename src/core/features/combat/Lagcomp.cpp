@@ -171,7 +171,7 @@ namespace Lagcomp {
             return;
         }
 
-        const auto& enemies = CombatShared::GetEnemiesCached();
+        const auto enemies = CombatShared::GetEnemiesCached();
 
         std::unordered_set<uintptr_t> active;
         active.reserve(enemies.size());

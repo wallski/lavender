@@ -5,12 +5,14 @@
 #include "../../systems/Tracing.h"
 #include "../../math/math.hpp"
 #include <cmath>
+#include <mutex>
 
 namespace CombatShared {
 
     static std::vector<Enemy> g_enemyCache;
     static volatile LONG g_frameId = 0;
     static volatile LONG g_cacheFrame = -1;
+    static std::mutex g_enemyCacheMtx;
 
     static constexpr uintptr_t kPtrMin = 0x0000000000010000;
     static constexpr uintptr_t kPtrMax = 0x00007FFFFFFFFFFF;
@@ -529,12 +531,15 @@ namespace CombatShared {
         InterlockedIncrement(&g_frameId);
     }
 
-    const std::vector<Enemy>& GetEnemiesCached() {
+    std::vector<Enemy> GetEnemiesCached() {
+        std::lock_guard<std::mutex> lock(g_enemyCacheMtx);
+
         const LONG cur = g_frameId;
         if (cur != g_cacheFrame) {
             g_enemyCache = BuildEnemies();
             InterlockedExchange(&g_cacheFrame, cur);
         }
+
         return g_enemyCache;
     }
 }

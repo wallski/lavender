@@ -8,6 +8,7 @@
 #include "../features/visuals/bombtimer/BombTimer.h"
 #include "../features/combat/legit/triggerbot/Triggerbot.h"
 #include "../features/combat/legit/aim/Aim.h"
+#include "../features/combat/rage/Rage.h"
 #include "../../render/Renderer.h"
 #include "../../render/Style.h"
 #include <ShlObj.h>
@@ -235,6 +236,16 @@ namespace ConfigManager {
         f << "aim.on_accuracy=" << (Aim::IsOnAccuracy() ? 1 : 0) << "\n";
         f << "aim.accuracy_speed=" << Aim::GetAccuracySpeed() << "\n";
 
+        f << "rage.enabled=" << (Rage::IsEnabled() ? 1 : 0) << "\n";
+        f << "rage.auto_shoot=" << (Rage::IsAutoShoot() ? 1 : 0) << "\n";
+        f << "rage.team_check=" << (Rage::IsTeamCheck() ? 1 : 0) << "\n";
+        f << "rage.hitboxes=" << (unsigned int)Rage::GetHitboxes() << "\n";
+        f << "rage.fov=" << Rage::GetFov() << "\n";
+        f << "rage.min_damage=" << Rage::GetMinDamage() << "\n";
+        f << "rage.silent=" << (Rage::IsSilent() ? 1 : 0) << "\n";
+        f << "rage.no_spread=" << (Rage::IsNoSpread() ? 1 : 0) << "\n";
+        f << "rage.auto_scope=" << (Rage::IsAutoScope() ? 1 : 0) << "\n";
+
         f << "menu.key=" << Renderer::GetMenuKey() << "\n";
         f << "menu.accent_r=" << Style::Accent.x << "\n";
         f << "menu.accent_g=" << Style::Accent.y << "\n";
@@ -321,6 +332,16 @@ namespace ConfigManager {
         int aimSmooth = 3;
         bool aimOnAccuracy = false;
         float aimAccuracySpeed = 5.0f;
+
+        bool rageEnabled = false;
+        bool rageAutoShoot = true;
+        bool rageTeamCheck = true;
+        uint32_t rageHitboxes = 0x1F;
+        float rageFov = 15.0f;
+        int rageMinDamage = 1;
+        bool rageSilent = true;
+        bool rageNoSpread = false;
+        bool rageAutoScope = true;
 
         int menuKey = VK_DELETE;
         float accent[3] = { Style::Accent.x, Style::Accent.y, Style::Accent.z };
@@ -458,6 +479,16 @@ namespace ConfigManager {
             else if (key == "aim.on_accuracy") aimOnAccuracy = ParseBool(val);
             else if (key == "aim.accuracy_speed") aimAccuracySpeed = ParseFloat(val, aimAccuracySpeed);
 
+            else if (key == "rage.enabled") rageEnabled = ParseBool(val);
+            else if (key == "rage.auto_shoot") rageAutoShoot = ParseBool(val);
+            else if (key == "rage.team_check") rageTeamCheck = ParseBool(val);
+            else if (key == "rage.hitboxes") rageHitboxes = (uint32_t)ParseInt(val, (int)rageHitboxes);
+            else if (key == "rage.fov") rageFov = ParseFloat(val, rageFov);
+            else if (key == "rage.min_damage") rageMinDamage = ParseInt(val, rageMinDamage);
+            else if (key == "rage.silent") rageSilent = ParseBool(val);
+            else if (key == "rage.no_spread") rageNoSpread = ParseBool(val);
+            else if (key == "rage.auto_scope") rageAutoScope = ParseBool(val);
+
             else if (key == "menu.key") menuKey = ParseInt(val, menuKey);
             else if (key == "menu.accent_r") accent[0] = ParseFloat(val, accent[0]);
             else if (key == "menu.accent_g") accent[1] = ParseFloat(val, accent[1]);
@@ -537,6 +568,16 @@ namespace ConfigManager {
         Aim::SetSmooth(aimSmooth);
         Aim::SetOnAccuracy(aimOnAccuracy);
         Aim::SetAccuracySpeed(aimAccuracySpeed);
+
+        Rage::SetEnabled(rageEnabled);
+        Rage::SetAutoShoot(rageAutoShoot);
+        Rage::SetTeamCheck(rageTeamCheck);
+        Rage::SetHitboxes(rageHitboxes);
+        Rage::SetFov(rageFov);
+        Rage::SetMinDamage(rageMinDamage);
+        Rage::SetSilent(rageSilent);
+        Rage::SetNoSpread(rageNoSpread);
+        Rage::SetAutoScope(rageAutoScope);
 
         Renderer::SetMenuKey(menuKey);
         Style::SetAccent(accent[0], accent[1], accent[2]);

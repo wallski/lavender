@@ -74,7 +74,7 @@ namespace CombatShared {
     std::vector<Enemy> GetEnemies();
 
     void BeginFrame();
-    const std::vector<Enemy>& GetEnemiesCached();
+    std::vector<Enemy> GetEnemiesCached();
 
     bool  IsVisible(const Vec3& start, const Vec3& end, uintptr_t skipEntity, uintptr_t targetEntity);
 }

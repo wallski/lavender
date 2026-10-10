@@ -222,7 +222,7 @@ namespace Triggerbot {
         const uint32_t hb = (uint32_t)g_hitboxes;
         const int teamCheck = g_teamCheck;
         const int localTeam = ReadLocalTeam(localPawn);
-        const auto& enemies = CombatShared::GetEnemiesCached();
+        const auto enemies = CombatShared::GetEnemiesCached();
 
         bool hasTarget = false;
         for (const auto& e : enemies) {

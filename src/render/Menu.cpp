@@ -12,6 +12,7 @@
 #include "../core/features/visuals/bombtimer/BombTimer.h"
 #include "../core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "../core/features/combat/legit/aim/Aim.h"
+#include "../core/features/combat/rage/Rage.h"
 #include "../core/config/ConfigManager.h"
 
 namespace Menu {
@@ -93,6 +94,62 @@ namespace Menu {
         ImGui::PopID();
     }
 
+    static void DrawRageMainCard() {
+        bool enabled = Rage::IsEnabled();
+        bool autoShoot = Rage::IsAutoShoot();
+        bool silent = Rage::IsSilent();
+        bool teamCheck = Rage::IsTeamCheck();
+        bool noSpread = Rage::IsNoSpread();
+        bool autoScope = Rage::IsAutoScope();
+
+        Widgets::BeginCard("RAGEBOT", 6);
+
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            Rage::SetEnabled(enabled);
+        }
+        if (Widgets::Toggle("Auto shoot", &autoShoot)) {
+            Rage::SetAutoShoot(autoShoot);
+        }
+        if (Widgets::Toggle("Silent", &silent)) {
+            Rage::SetSilent(silent);
+        }
+        if (Widgets::Toggle("No spread", &noSpread)) {
+            Rage::SetNoSpread(noSpread);
+        }
+        if (Widgets::Toggle("Auto scope", &autoScope)) {
+            Rage::SetAutoScope(autoScope);
+        }
+        if (Widgets::Toggle("Team check", &teamCheck)) {
+            Rage::SetTeamCheck(teamCheck);
+        }
+
+        Widgets::EndCard();
+    }
+
+    static void DrawRageAccuracyCard() {
+        float fov = Rage::GetFov();
+        int minDamage = Rage::GetMinDamage();
+
+        Widgets::BeginCard("ACCURACY", 2);
+
+        if (Widgets::SliderFloat("FOV", &fov, 0.5f, 30.0f, "%.1f")) {
+            Rage::SetFov(fov);
+        }
+        if (Widgets::SliderInt("Min damage", &minDamage, 1, 130)) {
+            Rage::SetMinDamage(minDamage);
+        }
+
+        Widgets::EndCard();
+    }
+
+    static void DrawRageHitboxCard() {
+        uint32_t hitboxes = Rage::GetHitboxes();
+
+        Widgets::BeginCard("HITBOXES", 1);
+        DrawHitboxDropdown(&hitboxes, Rage::SetHitboxes);
+        Widgets::EndCard();
+    }
+
     static void DrawRageTab() {
         const float totalW = ImGui::GetContentRegionAvail().x;
         const float gap = 10.0f;
@@ -100,15 +157,15 @@ namespace Menu {
 
         ImGui::BeginChild("##rage_col_left", ImVec2(colW, 0), false,
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-        Widgets::BeginCard("RAGE", 1);
-        Widgets::TextMuted("porting from velocity...");
-        Widgets::EndCard();
+        DrawRageMainCard();
         ImGui::EndChild();
 
         ImGui::SameLine(0, gap);
 
         ImGui::BeginChild("##rage_col_right", ImVec2(colW, 0), false,
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        DrawRageAccuracyCard();
+        DrawRageHitboxCard();
         ImGui::EndChild();
     }
 

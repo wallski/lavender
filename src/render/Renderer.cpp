@@ -11,6 +11,7 @@
 #include "../core/features/visuals/bombtimer/BombTimer.h"
 #include "../core/features/combat/CombatShared.h"
 #include "../core/features/combat/Lagcomp.h"
+#include "../core/features/combat/rage/Rage.h"
 #include "../core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "../core/features/combat/legit/aim/Aim.h"
 #include "../core/systems/systems.hpp"
@@ -266,6 +267,7 @@ namespace Renderer {
 
         Triggerbot::Tick();
         Aim::Tick();
+        Rage::Tick();
 
         if (!g_renderTarget) return;
 

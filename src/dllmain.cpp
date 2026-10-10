@@ -18,6 +18,7 @@
 #include "core/features/visuals/bombtimer/BombTimer.h"
 #include "core/features/combat/CombatShared.h"
 #include "core/features/combat/Lagcomp.h"
+#include "core/features/combat/rage/Rage.h"
 #include "core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "core/features/combat/legit/aim/Aim.h"
 #include "render/Renderer.h"
@@ -170,7 +171,6 @@ void MainThread(HMODULE hModule) {
         return;
     }
     OffsetConfig::Resolve();
-    Log("[Lavender] Offsets loaded.\n");
 
     Chams::SetEntityListGlobal(OffsetConfig::globals.dwEntityList);
     Chams::SetLocalPawnGlobal(OffsetConfig::globals.dwLocalPlayerPawn);
@@ -178,14 +178,14 @@ void MainThread(HMODULE hModule) {
     ConfigManager::Initialize();
 
     if (!Materials::Initialize()) Log("[Lavender] Materials failed\n");
-    if (!Skybox::Initialize())    Log("[Lavender] Skybox failed (feature disabled)\n");
+    if (!Skybox::Initialize())    Log("[Lavender] Skybox failed\n");
 
     CVar::Initialize();
     systems::schemas::Initialize();
     CombatShared::Initialize();
 
     if (!Tracing::Initialize()) {
-        Log("[Lavender] Tracing failed (some sigs dead)\n");
+        Log("[Lavender] Tracing failed\n");
     }
     Lagcomp::Initialize();
 
@@ -197,6 +197,7 @@ void MainThread(HMODULE hModule) {
 
     Triggerbot::Initialize();
     Aim::Initialize();
+    Rage::Initialize();
 
     PresentHook::Initialize();
     std::this_thread::sleep_for(std::chrono::milliseconds(2500));
@@ -205,7 +206,7 @@ void MainThread(HMODULE hModule) {
     uintptr_t fn = Memory::FindPattern("scenesystem.dll", pattern);
     if (fn) {
         g_sortFn = fn;
-        if (InstallSortHook(fn)) Log("[Lavender] Sort hook installed at 0x%llX\n", (unsigned long long)fn);
+        if (InstallSortHook(fn)) Log("[Lavender] Sort hook installed\n");
         else                     Log("[Lavender] Sort hook install FAILED\n");
     }
     else {
@@ -219,6 +220,7 @@ void MainThread(HMODULE hModule) {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
 
+    Rage::Shutdown();
     Aim::Shutdown();
     Triggerbot::Shutdown();
     CreateMoveHook::Shutdown();

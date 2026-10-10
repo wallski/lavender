@@ -170,7 +170,7 @@ namespace Aim {
         Vec3 currentAngles;
         if (!ReadViewAngles(currentAngles)) return;
 
-        const auto& enemies = CombatShared::GetEnemiesCached();
+        const auto enemies = CombatShared::GetEnemiesCached();
         if (enemies.empty()) {
             g_onTargetNow.store(false);
             return;
