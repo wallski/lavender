@@ -202,6 +202,7 @@
     <ClCompile Include="src\core\features\visuals\esp\Esp.cpp" />
     <ClCompile Include="src\core\features\visuals\removals\Removals.cpp" />
     <ClCompile Include="src\core\features\visuals\skybox\Skybox.cpp" />
+    <ClCompile Include="src\core\features\visuals\thirdperson\ThirdPerson.cpp" />
     <ClCompile Include="src\core\hooks\CreateMoveHook.cpp" />
     <ClCompile Include="src\core\hooks\InlineHook.cpp" />
     <ClCompile Include="src\core\hooks\PresentHook.cpp">
@@ -299,6 +300,7 @@
     <ClInclude Include="src\core\features\visuals\esp\Esp.h" />
     <ClInclude Include="src\core\features\visuals\removals\Removals.h" />
     <ClInclude Include="src\core\features\visuals\skybox\Skybox.h" />
+    <ClInclude Include="src\core\features\visuals\thirdperson\ThirdPerson.h" />
     <ClInclude Include="src\core\hooks\CreateMoveHook.h" />
     <ClInclude Include="src\core\hooks\InlineHook.h" />
     <ClInclude Include="src\core\hooks\PresentHook.h" />

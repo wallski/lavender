@@ -6,6 +6,7 @@
 #include "../features/visuals/removals/Removals.h"
 #include "../features/visuals/skybox/Skybox.h"
 #include "../features/visuals/bombtimer/BombTimer.h"
+#include "../features/visuals/thirdperson/ThirdPerson.h"
 #include "../features/combat/legit/triggerbot/Triggerbot.h"
 #include "../features/combat/legit/aim/Aim.h"
 #include "../features/combat/rage/Rage.h"
@@ -22,6 +23,103 @@
 namespace ConfigManager {
 
     static const char* kRageGroupKeys[] = { "pistol", "smg", "rifle", "shotgun", "sniper", "lmg" };
+
+    struct RageGroupData {
+        bool enabled = false;
+        bool autoShoot = true;
+        bool silent = true;
+        bool noSpread = false;
+        bool teamCheck = true;
+        int minDamage = 1;
+        uint32_t hitboxes = 0x1F;
+    };
+
+    struct ChamsData {
+        bool enabled = false;
+        int material = 2;
+        bool occluded = false;
+        bool teamCheck = false;
+        float color[4] = { 0.0f, 1.0f, 0.4f, 1.0f };
+    };
+
+    struct EspData {
+        bool enabled = true;
+        bool teamCheck = true;
+        bool boxEnabled = true;
+        int boxStyle = 1;
+        bool boxFill = false;
+        bool boxOutline = true;
+        float boxCornerLength = 8.0f;
+        float boxVisible[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+        float boxOccluded[4] = { 1.000f, 0.400f, 0.400f, 1.00f };
+        float boxFillColor[4] = { 0.659f, 0.333f, 0.969f, 0.25f };
+
+        bool healthEnabled = false;
+        int healthPosition = 0;
+        int healthStyle = 0;
+        float healthColor[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+        float healthLow[4] = { 1.00f, 0.25f, 0.25f, 1.00f };
+        float healthHigh[4] = { 0.30f, 1.00f, 0.30f, 1.00f };
+        bool healthShowValue = true;
+        float healthThickness = 3.0f;
+
+        bool ammoEnabled = false;
+        int ammoPosition = 2;
+        float ammoColor[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
+        bool ammoShowValue = true;
+        float ammoThickness = 3.0f;
+
+        bool nameEnabled = false;
+        int namePosition = 0;
+        float nameColor[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
+        float nameOccluded[4] = { 0.850f, 0.500f, 0.500f, 1.00f };
+
+        bool skeletonEnabled = false;
+        float skeletonColor[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+        float skeletonOccluded[4] = { 1.000f, 0.400f, 0.400f, 1.00f };
+        float skeletonThickness = 1.5f;
+        bool skeletonDebug = false;
+
+        bool fovCircleEnabled = false;
+        float fovCircleColor[4] = { 0.659f, 0.333f, 0.969f, 0.85f };
+    };
+
+    struct MiscData {
+        bool removalsFlash = false;
+        bool removalsSmoke = false;
+
+        bool bombTimerEnabled = false;
+        bool bombTimerDefuse = true;
+        bool bombTimerSite = true;
+        float bombTimerScale = 1.0f;
+        float bombTimerColor[4] = { 1.0f, 0.25f, 0.25f, 1.0f };
+        float bombTimerDefuseColor[4] = { 0.25f, 0.85f, 0.35f, 1.0f };
+
+        bool skyboxEnabled = false;
+        int skyboxIndex = 0;
+
+        bool thirdPersonEnabled = false;
+        int thirdPersonKey = VK_MBUTTON;
+        float thirdPersonDistance = 85.0f;
+
+        bool triggerEnabled = false;
+        int triggerKey = VK_XBUTTON2;
+        bool triggerTeamCheck = true;
+        uint32_t triggerHitboxes = 1;
+        int triggerDelay = 60;
+
+        bool aimEnabled = false;
+        int aimKey = VK_XBUTTON1;
+        bool aimTeamCheck = true;
+        uint32_t aimHitboxes = 1;
+        float aimFov = 5.0f;
+        int aimSmooth = 3;
+        bool aimOnAccuracy = false;
+        float aimAccuracySpeed = 5.0f;
+
+        int menuKey = VK_DELETE;
+        float accent[3] = { 0.659f, 0.333f, 0.969f };
+    };
 
     static std::string g_directory;
     static std::string g_currentName = "default";
@@ -64,6 +162,166 @@ namespace ConfigManager {
     static int ParseInt(const std::string& s, int fallback) {
         try { return std::stoi(s); }
         catch (...) { return fallback; }
+    }
+
+    static bool TryParseRageKey(const std::string& key, const std::string& val, RageGroupData* groups) {
+        for (int i = 0; i < (int)Rage::Group::Count; i++) {
+            const std::string prefix = std::string("rage.") + kRageGroupKeys[i] + ".";
+            if (key.rfind(prefix, 0) != 0) continue;
+
+            const std::string suffix = key.substr(prefix.size());
+            auto& rg = groups[i];
+
+            if (suffix == "enabled") rg.enabled = ParseBool(val);
+            else if (suffix == "auto_shoot") rg.autoShoot = ParseBool(val);
+            else if (suffix == "silent") rg.silent = ParseBool(val);
+            else if (suffix == "no_spread") rg.noSpread = ParseBool(val);
+            else if (suffix == "team_check") rg.teamCheck = ParseBool(val);
+            else if (suffix == "min_damage") rg.minDamage = ParseInt(val, rg.minDamage);
+            else if (suffix == "hitboxes") rg.hitboxes = (uint32_t)ParseInt(val, (int)rg.hitboxes);
+            return true;
+        }
+        return false;
+    }
+
+    static void ParseChamsKey(const std::string& key, const std::string& val, ChamsData& d) {
+        if (key == "chams.enabled") d.enabled = ParseBool(val);
+        else if (key == "chams.material") d.material = ParseInt(val, d.material);
+        else if (key == "chams.occluded") d.occluded = ParseBool(val);
+        else if (key == "chams.team_check") d.teamCheck = ParseBool(val);
+        else if (key == "chams.color_r") d.color[0] = ParseFloat(val, d.color[0]);
+        else if (key == "chams.color_g") d.color[1] = ParseFloat(val, d.color[1]);
+        else if (key == "chams.color_b") d.color[2] = ParseFloat(val, d.color[2]);
+        else if (key == "chams.color_a") d.color[3] = ParseFloat(val, d.color[3]);
+    }
+
+    static bool ParseEspKey(const std::string& key, const std::string& val, EspData& d) {
+        if (key == "esp.enabled") d.enabled = ParseBool(val);
+        else if (key == "esp.team_check") d.teamCheck = ParseBool(val);
+        else if (key == "esp.box_enabled") d.boxEnabled = ParseBool(val);
+        else if (key == "esp.box_style") d.boxStyle = ParseInt(val, d.boxStyle);
+        else if (key == "esp.box_fill") d.boxFill = ParseBool(val);
+        else if (key == "esp.box_outline") d.boxOutline = ParseBool(val);
+        else if (key == "esp.box_corner_length") d.boxCornerLength = ParseFloat(val, d.boxCornerLength);
+        else if (key == "esp.box_visible_r") d.boxVisible[0] = ParseFloat(val, d.boxVisible[0]);
+        else if (key == "esp.box_visible_g") d.boxVisible[1] = ParseFloat(val, d.boxVisible[1]);
+        else if (key == "esp.box_visible_b") d.boxVisible[2] = ParseFloat(val, d.boxVisible[2]);
+        else if (key == "esp.box_visible_a") d.boxVisible[3] = ParseFloat(val, d.boxVisible[3]);
+        else if (key == "esp.box_occluded_r") d.boxOccluded[0] = ParseFloat(val, d.boxOccluded[0]);
+        else if (key == "esp.box_occluded_g") d.boxOccluded[1] = ParseFloat(val, d.boxOccluded[1]);
+        else if (key == "esp.box_occluded_b") d.boxOccluded[2] = ParseFloat(val, d.boxOccluded[2]);
+        else if (key == "esp.box_occluded_a") d.boxOccluded[3] = ParseFloat(val, d.boxOccluded[3]);
+        else if (key == "esp.box_fill_r") d.boxFillColor[0] = ParseFloat(val, d.boxFillColor[0]);
+        else if (key == "esp.box_fill_g") d.boxFillColor[1] = ParseFloat(val, d.boxFillColor[1]);
+        else if (key == "esp.box_fill_b") d.boxFillColor[2] = ParseFloat(val, d.boxFillColor[2]);
+        else if (key == "esp.box_fill_a") d.boxFillColor[3] = ParseFloat(val, d.boxFillColor[3]);
+
+        else if (key == "esp.health_enabled") d.healthEnabled = ParseBool(val);
+        else if (key == "esp.health_position") d.healthPosition = ParseInt(val, d.healthPosition);
+        else if (key == "esp.health_style") d.healthStyle = ParseInt(val, d.healthStyle);
+        else if (key == "esp.health_color_r") d.healthColor[0] = ParseFloat(val, d.healthColor[0]);
+        else if (key == "esp.health_color_g") d.healthColor[1] = ParseFloat(val, d.healthColor[1]);
+        else if (key == "esp.health_color_b") d.healthColor[2] = ParseFloat(val, d.healthColor[2]);
+        else if (key == "esp.health_color_a") d.healthColor[3] = ParseFloat(val, d.healthColor[3]);
+        else if (key == "esp.health_low_r") d.healthLow[0] = ParseFloat(val, d.healthLow[0]);
+        else if (key == "esp.health_low_g") d.healthLow[1] = ParseFloat(val, d.healthLow[1]);
+        else if (key == "esp.health_low_b") d.healthLow[2] = ParseFloat(val, d.healthLow[2]);
+        else if (key == "esp.health_low_a") d.healthLow[3] = ParseFloat(val, d.healthLow[3]);
+        else if (key == "esp.health_high_r") d.healthHigh[0] = ParseFloat(val, d.healthHigh[0]);
+        else if (key == "esp.health_high_g") d.healthHigh[1] = ParseFloat(val, d.healthHigh[1]);
+        else if (key == "esp.health_high_b") d.healthHigh[2] = ParseFloat(val, d.healthHigh[2]);
+        else if (key == "esp.health_high_a") d.healthHigh[3] = ParseFloat(val, d.healthHigh[3]);
+        else if (key == "esp.health_show_value") d.healthShowValue = ParseBool(val);
+        else if (key == "esp.health_thickness") d.healthThickness = ParseFloat(val, d.healthThickness);
+
+        else if (key == "esp.ammo_enabled") d.ammoEnabled = ParseBool(val);
+        else if (key == "esp.ammo_position") d.ammoPosition = ParseInt(val, d.ammoPosition);
+        else if (key == "esp.ammo_color_r") d.ammoColor[0] = ParseFloat(val, d.ammoColor[0]);
+        else if (key == "esp.ammo_color_g") d.ammoColor[1] = ParseFloat(val, d.ammoColor[1]);
+        else if (key == "esp.ammo_color_b") d.ammoColor[2] = ParseFloat(val, d.ammoColor[2]);
+        else if (key == "esp.ammo_color_a") d.ammoColor[3] = ParseFloat(val, d.ammoColor[3]);
+        else if (key == "esp.ammo_show_value") d.ammoShowValue = ParseBool(val);
+        else if (key == "esp.ammo_thickness") d.ammoThickness = ParseFloat(val, d.ammoThickness);
+
+        else if (key == "esp.name_enabled") d.nameEnabled = ParseBool(val);
+        else if (key == "esp.name_position") d.namePosition = ParseInt(val, d.namePosition);
+        else if (key == "esp.name_color_r") d.nameColor[0] = ParseFloat(val, d.nameColor[0]);
+        else if (key == "esp.name_color_g") d.nameColor[1] = ParseFloat(val, d.nameColor[1]);
+        else if (key == "esp.name_color_b") d.nameColor[2] = ParseFloat(val, d.nameColor[2]);
+        else if (key == "esp.name_color_a") d.nameColor[3] = ParseFloat(val, d.nameColor[3]);
+        else if (key == "esp.name_occluded_r") d.nameOccluded[0] = ParseFloat(val, d.nameOccluded[0]);
+        else if (key == "esp.name_occluded_g") d.nameOccluded[1] = ParseFloat(val, d.nameOccluded[1]);
+        else if (key == "esp.name_occluded_b") d.nameOccluded[2] = ParseFloat(val, d.nameOccluded[2]);
+        else if (key == "esp.name_occluded_a") d.nameOccluded[3] = ParseFloat(val, d.nameOccluded[3]);
+
+        else if (key == "esp.skeleton_enabled") d.skeletonEnabled = ParseBool(val);
+        else if (key == "esp.skeleton_color_r") d.skeletonColor[0] = ParseFloat(val, d.skeletonColor[0]);
+        else if (key == "esp.skeleton_color_g") d.skeletonColor[1] = ParseFloat(val, d.skeletonColor[1]);
+        else if (key == "esp.skeleton_color_b") d.skeletonColor[2] = ParseFloat(val, d.skeletonColor[2]);
+        else if (key == "esp.skeleton_color_a") d.skeletonColor[3] = ParseFloat(val, d.skeletonColor[3]);
+        else if (key == "esp.skeleton_occluded_r") d.skeletonOccluded[0] = ParseFloat(val, d.skeletonOccluded[0]);
+        else if (key == "esp.skeleton_occluded_g") d.skeletonOccluded[1] = ParseFloat(val, d.skeletonOccluded[1]);
+        else if (key == "esp.skeleton_occluded_b") d.skeletonOccluded[2] = ParseFloat(val, d.skeletonOccluded[2]);
+        else if (key == "esp.skeleton_occluded_a") d.skeletonOccluded[3] = ParseFloat(val, d.skeletonOccluded[3]);
+        else if (key == "esp.skeleton_thickness") d.skeletonThickness = ParseFloat(val, d.skeletonThickness);
+        else if (key == "esp.skeleton_debug") d.skeletonDebug = ParseBool(val);
+
+        else if (key == "esp.fov_circle_enabled") d.fovCircleEnabled = ParseBool(val);
+        else if (key == "esp.fov_circle_color_r") d.fovCircleColor[0] = ParseFloat(val, d.fovCircleColor[0]);
+        else if (key == "esp.fov_circle_color_g") d.fovCircleColor[1] = ParseFloat(val, d.fovCircleColor[1]);
+        else if (key == "esp.fov_circle_color_b") d.fovCircleColor[2] = ParseFloat(val, d.fovCircleColor[2]);
+        else if (key == "esp.fov_circle_color_a") d.fovCircleColor[3] = ParseFloat(val, d.fovCircleColor[3]);
+        else return false;
+
+        return true;
+    }
+
+    static bool ParseMiscKey(const std::string& key, const std::string& val, MiscData& d) {
+        if (key == "removals.flash") d.removalsFlash = ParseBool(val);
+        else if (key == "removals.smoke") d.removalsSmoke = ParseBool(val);
+
+        else if (key == "bombtimer.enabled") d.bombTimerEnabled = ParseBool(val);
+        else if (key == "bombtimer.defuse") d.bombTimerDefuse = ParseBool(val);
+        else if (key == "bombtimer.site") d.bombTimerSite = ParseBool(val);
+        else if (key == "bombtimer.scale") d.bombTimerScale = ParseFloat(val, d.bombTimerScale);
+        else if (key == "bombtimer.color_r") d.bombTimerColor[0] = ParseFloat(val, d.bombTimerColor[0]);
+        else if (key == "bombtimer.color_g") d.bombTimerColor[1] = ParseFloat(val, d.bombTimerColor[1]);
+        else if (key == "bombtimer.color_b") d.bombTimerColor[2] = ParseFloat(val, d.bombTimerColor[2]);
+        else if (key == "bombtimer.color_a") d.bombTimerColor[3] = ParseFloat(val, d.bombTimerColor[3]);
+        else if (key == "bombtimer.defuse_color_r") d.bombTimerDefuseColor[0] = ParseFloat(val, d.bombTimerDefuseColor[0]);
+        else if (key == "bombtimer.defuse_color_g") d.bombTimerDefuseColor[1] = ParseFloat(val, d.bombTimerDefuseColor[1]);
+        else if (key == "bombtimer.defuse_color_b") d.bombTimerDefuseColor[2] = ParseFloat(val, d.bombTimerDefuseColor[2]);
+        else if (key == "bombtimer.defuse_color_a") d.bombTimerDefuseColor[3] = ParseFloat(val, d.bombTimerDefuseColor[3]);
+
+        else if (key == "world.skybox_enabled") d.skyboxEnabled = ParseBool(val);
+        else if (key == "world.skybox_index") d.skyboxIndex = ParseInt(val, d.skyboxIndex);
+
+        else if (key == "thirdperson.enabled") d.thirdPersonEnabled = ParseBool(val);
+        else if (key == "thirdperson.key") d.thirdPersonKey = ParseInt(val, d.thirdPersonKey);
+        else if (key == "thirdperson.distance") d.thirdPersonDistance = ParseFloat(val, d.thirdPersonDistance);
+
+        else if (key == "trigger.enabled") d.triggerEnabled = ParseBool(val);
+        else if (key == "trigger.key") d.triggerKey = ParseInt(val, d.triggerKey);
+        else if (key == "trigger.team_check") d.triggerTeamCheck = ParseBool(val);
+        else if (key == "trigger.hitboxes") d.triggerHitboxes = (uint32_t)ParseInt(val, (int)d.triggerHitboxes);
+        else if (key == "trigger.delay") d.triggerDelay = ParseInt(val, d.triggerDelay);
+
+        else if (key == "aim.enabled") d.aimEnabled = ParseBool(val);
+        else if (key == "aim.key") d.aimKey = ParseInt(val, d.aimKey);
+        else if (key == "aim.team_check") d.aimTeamCheck = ParseBool(val);
+        else if (key == "aim.hitboxes") d.aimHitboxes = (uint32_t)ParseInt(val, (int)d.aimHitboxes);
+        else if (key == "aim.fov") d.aimFov = ParseFloat(val, d.aimFov);
+        else if (key == "aim.smooth") d.aimSmooth = ParseInt(val, d.aimSmooth);
+        else if (key == "aim.on_accuracy") d.aimOnAccuracy = ParseBool(val);
+        else if (key == "aim.accuracy_speed") d.aimAccuracySpeed = ParseFloat(val, d.aimAccuracySpeed);
+
+        else if (key == "menu.key") d.menuKey = ParseInt(val, d.menuKey);
+        else if (key == "menu.accent_r") d.accent[0] = ParseFloat(val, d.accent[0]);
+        else if (key == "menu.accent_g") d.accent[1] = ParseFloat(val, d.accent[1]);
+        else if (key == "menu.accent_b") d.accent[2] = ParseFloat(val, d.accent[2]);
+        else return false;
+
+        return true;
     }
 
     bool Initialize() {
@@ -223,6 +481,10 @@ namespace ConfigManager {
         f << "world.skybox_enabled=" << (Skybox::IsEnabled() ? 1 : 0) << "\n";
         f << "world.skybox_index=" << Skybox::GetSelectedIndex() << "\n";
 
+        f << "thirdperson.enabled=" << (ThirdPerson::IsEnabled() ? 1 : 0) << "\n";
+        f << "thirdperson.key=" << ThirdPerson::GetKey() << "\n";
+        f << "thirdperson.distance=" << ThirdPerson::GetDistance() << "\n";
+
         f << "trigger.enabled=" << (Triggerbot::IsEnabled() ? 1 : 0) << "\n";
         f << "trigger.key=" << Triggerbot::GetKey() << "\n";
         f << "trigger.team_check=" << (Triggerbot::GetTeamCheck() ? 1 : 0) << "\n";
@@ -264,93 +526,10 @@ namespace ConfigManager {
         std::ifstream f(PathFor(name));
         if (!f.is_open()) return false;
 
-        bool chamsEnabled = false;
-        int chamsMaterial = (int)Materials::Id::Flat;
-        bool chamsOccluded = false;
-        bool chamsTeamCheck = false;
-        float chamsColor[4] = { 0.0f, 1.0f, 0.4f, 1.0f };
-
-        bool espEnabled = true;
-        bool espTeamCheck = true;
-        bool espBoxEnabled = true;
-        int espBoxStyle = 1;
-        bool espBoxFill = false;
-        bool espBoxOutline = true;
-        float espBoxCornerLength = 8.0f;
-        float espBoxVisible[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
-        float espBoxOccluded[4] = { 1.000f, 0.400f, 0.400f, 1.00f };
-        float espBoxFillColor[4] = { 0.659f, 0.333f, 0.969f, 0.25f };
-
-        bool espHealthEnabled = false;
-        int espHealthPosition = 0;
-        int espHealthStyle = 0;
-        float espHealthColor[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
-        float espHealthLow[4] = { 1.00f, 0.25f, 0.25f, 1.00f };
-        float espHealthHigh[4] = { 0.30f, 1.00f, 0.30f, 1.00f };
-        bool espHealthShowValue = true;
-        float espHealthThickness = 3.0f;
-
-        bool espAmmoEnabled = false;
-        int espAmmoPosition = 2;
-        float espAmmoColor[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
-        bool espAmmoShowValue = true;
-        float espAmmoThickness = 3.0f;
-
-        bool espNameEnabled = false;
-        int espNamePosition = 0;
-        float espNameColor[4] = { 1.00f, 1.00f, 1.00f, 1.00f };
-        float espNameOccluded[4] = { 0.850f, 0.500f, 0.500f, 1.00f };
-
-        bool espSkeletonEnabled = false;
-        float espSkeletonColor[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
-        float espSkeletonOccluded[4] = { 1.000f, 0.400f, 0.400f, 1.00f };
-        float espSkeletonThickness = 1.5f;
-        bool espSkeletonDebug = false;
-
-        bool espFovCircleEnabled = false;
-        float espFovCircleColor[4] = { 0.659f, 0.333f, 0.969f, 0.85f };
-
-        bool removalsFlash = false;
-        bool removalsSmoke = false;
-
-        bool bombTimerEnabled = false;
-        bool bombTimerDefuse = true;
-        bool bombTimerSite = true;
-        float bombTimerScale = 1.0f;
-        float bombTimerColor[4] = { 1.0f, 0.25f, 0.25f, 1.0f };
-        float bombTimerDefuseColor[4] = { 0.25f, 0.85f, 0.35f, 1.0f };
-
-        bool skyboxEnabled = false;
-        int skyboxIndex = 0;
-
-        bool triggerEnabled = false;
-        int triggerKey = VK_XBUTTON2;
-        bool triggerTeamCheck = true;
-        uint32_t triggerHitboxes = 1;
-        int triggerDelay = 60;
-
-        bool aimEnabled = false;
-        int aimKey = VK_XBUTTON1;
-        bool aimTeamCheck = true;
-        uint32_t aimHitboxes = 1;
-        float aimFov = 5.0f;
-        int aimSmooth = 3;
-        bool aimOnAccuracy = false;
-        float aimAccuracySpeed = 5.0f;
-
-        struct RageGroupData {
-            bool enabled = false;
-            bool autoShoot = true;
-            bool silent = true;
-            bool noSpread = false;
-            bool teamCheck = true;
-            int minDamage = 1;
-            uint32_t hitboxes = 0x1F;
-        };
+        ChamsData chams;
+        EspData esp;
+        MiscData misc;
         RageGroupData rageGroups[(int)Rage::Group::Count];
-
-        int menuKey = VK_DELETE;
-        float accent[3] = { Style::Accent.x, Style::Accent.y, Style::Accent.z };
 
         std::string line;
         while (std::getline(f, line)) {
@@ -366,223 +545,97 @@ namespace ConfigManager {
             std::string key = line.substr(0, eq);
             std::string val = line.substr(eq + 1);
 
-            if (key == "chams.enabled") chamsEnabled = ParseBool(val);
-            else if (key == "chams.material") chamsMaterial = ParseInt(val, chamsMaterial);
-            else if (key == "chams.occluded") chamsOccluded = ParseBool(val);
-            else if (key == "chams.team_check") chamsTeamCheck = ParseBool(val);
-            else if (key == "chams.color_r") chamsColor[0] = ParseFloat(val, chamsColor[0]);
-            else if (key == "chams.color_g") chamsColor[1] = ParseFloat(val, chamsColor[1]);
-            else if (key == "chams.color_b") chamsColor[2] = ParseFloat(val, chamsColor[2]);
-            else if (key == "chams.color_a") chamsColor[3] = ParseFloat(val, chamsColor[3]);
-
-            else if (key == "esp.enabled") espEnabled = ParseBool(val);
-            else if (key == "esp.team_check") espTeamCheck = ParseBool(val);
-            else if (key == "esp.box_enabled") espBoxEnabled = ParseBool(val);
-            else if (key == "esp.box_style") espBoxStyle = ParseInt(val, espBoxStyle);
-            else if (key == "esp.box_fill") espBoxFill = ParseBool(val);
-            else if (key == "esp.box_outline") espBoxOutline = ParseBool(val);
-            else if (key == "esp.box_corner_length") espBoxCornerLength = ParseFloat(val, espBoxCornerLength);
-            else if (key == "esp.box_visible_r") espBoxVisible[0] = ParseFloat(val, espBoxVisible[0]);
-            else if (key == "esp.box_visible_g") espBoxVisible[1] = ParseFloat(val, espBoxVisible[1]);
-            else if (key == "esp.box_visible_b") espBoxVisible[2] = ParseFloat(val, espBoxVisible[2]);
-            else if (key == "esp.box_visible_a") espBoxVisible[3] = ParseFloat(val, espBoxVisible[3]);
-            else if (key == "esp.box_occluded_r") espBoxOccluded[0] = ParseFloat(val, espBoxOccluded[0]);
-            else if (key == "esp.box_occluded_g") espBoxOccluded[1] = ParseFloat(val, espBoxOccluded[1]);
-            else if (key == "esp.box_occluded_b") espBoxOccluded[2] = ParseFloat(val, espBoxOccluded[2]);
-            else if (key == "esp.box_occluded_a") espBoxOccluded[3] = ParseFloat(val, espBoxOccluded[3]);
-            else if (key == "esp.box_fill_r") espBoxFillColor[0] = ParseFloat(val, espBoxFillColor[0]);
-            else if (key == "esp.box_fill_g") espBoxFillColor[1] = ParseFloat(val, espBoxFillColor[1]);
-            else if (key == "esp.box_fill_b") espBoxFillColor[2] = ParseFloat(val, espBoxFillColor[2]);
-            else if (key == "esp.box_fill_a") espBoxFillColor[3] = ParseFloat(val, espBoxFillColor[3]);
-
-            else if (key == "esp.health_enabled") espHealthEnabled = ParseBool(val);
-            else if (key == "esp.health_position") espHealthPosition = ParseInt(val, espHealthPosition);
-            else if (key == "esp.health_style") espHealthStyle = ParseInt(val, espHealthStyle);
-            else if (key == "esp.health_color_r") espHealthColor[0] = ParseFloat(val, espHealthColor[0]);
-            else if (key == "esp.health_color_g") espHealthColor[1] = ParseFloat(val, espHealthColor[1]);
-            else if (key == "esp.health_color_b") espHealthColor[2] = ParseFloat(val, espHealthColor[2]);
-            else if (key == "esp.health_color_a") espHealthColor[3] = ParseFloat(val, espHealthColor[3]);
-            else if (key == "esp.health_low_r") espHealthLow[0] = ParseFloat(val, espHealthLow[0]);
-            else if (key == "esp.health_low_g") espHealthLow[1] = ParseFloat(val, espHealthLow[1]);
-            else if (key == "esp.health_low_b") espHealthLow[2] = ParseFloat(val, espHealthLow[2]);
-            else if (key == "esp.health_low_a") espHealthLow[3] = ParseFloat(val, espHealthLow[3]);
-            else if (key == "esp.health_high_r") espHealthHigh[0] = ParseFloat(val, espHealthHigh[0]);
-            else if (key == "esp.health_high_g") espHealthHigh[1] = ParseFloat(val, espHealthHigh[1]);
-            else if (key == "esp.health_high_b") espHealthHigh[2] = ParseFloat(val, espHealthHigh[2]);
-            else if (key == "esp.health_high_a") espHealthHigh[3] = ParseFloat(val, espHealthHigh[3]);
-            else if (key == "esp.health_show_value") espHealthShowValue = ParseBool(val);
-            else if (key == "esp.health_thickness") espHealthThickness = ParseFloat(val, espHealthThickness);
-
-            else if (key == "esp.ammo_enabled") espAmmoEnabled = ParseBool(val);
-            else if (key == "esp.ammo_position") espAmmoPosition = ParseInt(val, espAmmoPosition);
-            else if (key == "esp.ammo_color_r") espAmmoColor[0] = ParseFloat(val, espAmmoColor[0]);
-            else if (key == "esp.ammo_color_g") espAmmoColor[1] = ParseFloat(val, espAmmoColor[1]);
-            else if (key == "esp.ammo_color_b") espAmmoColor[2] = ParseFloat(val, espAmmoColor[2]);
-            else if (key == "esp.ammo_color_a") espAmmoColor[3] = ParseFloat(val, espAmmoColor[3]);
-            else if (key == "esp.ammo_show_value") espAmmoShowValue = ParseBool(val);
-            else if (key == "esp.ammo_thickness") espAmmoThickness = ParseFloat(val, espAmmoThickness);
-
-            else if (key == "esp.name_enabled") espNameEnabled = ParseBool(val);
-            else if (key == "esp.name_position") espNamePosition = ParseInt(val, espNamePosition);
-            else if (key == "esp.name_color_r") espNameColor[0] = ParseFloat(val, espNameColor[0]);
-            else if (key == "esp.name_color_g") espNameColor[1] = ParseFloat(val, espNameColor[1]);
-            else if (key == "esp.name_color_b") espNameColor[2] = ParseFloat(val, espNameColor[2]);
-            else if (key == "esp.name_color_a") espNameColor[3] = ParseFloat(val, espNameColor[3]);
-            else if (key == "esp.name_occluded_r") espNameOccluded[0] = ParseFloat(val, espNameOccluded[0]);
-            else if (key == "esp.name_occluded_g") espNameOccluded[1] = ParseFloat(val, espNameOccluded[1]);
-            else if (key == "esp.name_occluded_b") espNameOccluded[2] = ParseFloat(val, espNameOccluded[2]);
-            else if (key == "esp.name_occluded_a") espNameOccluded[3] = ParseFloat(val, espNameOccluded[3]);
-
-            else if (key == "esp.skeleton_enabled") espSkeletonEnabled = ParseBool(val);
-            else if (key == "esp.skeleton_color_r") espSkeletonColor[0] = ParseFloat(val, espSkeletonColor[0]);
-            else if (key == "esp.skeleton_color_g") espSkeletonColor[1] = ParseFloat(val, espSkeletonColor[1]);
-            else if (key == "esp.skeleton_color_b") espSkeletonColor[2] = ParseFloat(val, espSkeletonColor[2]);
-            else if (key == "esp.skeleton_color_a") espSkeletonColor[3] = ParseFloat(val, espSkeletonColor[3]);
-            else if (key == "esp.skeleton_occluded_r") espSkeletonOccluded[0] = ParseFloat(val, espSkeletonOccluded[0]);
-            else if (key == "esp.skeleton_occluded_g") espSkeletonOccluded[1] = ParseFloat(val, espSkeletonOccluded[1]);
-            else if (key == "esp.skeleton_occluded_b") espSkeletonOccluded[2] = ParseFloat(val, espSkeletonOccluded[2]);
-            else if (key == "esp.skeleton_occluded_a") espSkeletonOccluded[3] = ParseFloat(val, espSkeletonOccluded[3]);
-            else if (key == "esp.skeleton_thickness") espSkeletonThickness = ParseFloat(val, espSkeletonThickness);
-            else if (key == "esp.skeleton_debug") espSkeletonDebug = ParseBool(val);
-
-            else if (key == "esp.fov_circle_enabled") espFovCircleEnabled = ParseBool(val);
-            else if (key == "esp.fov_circle_color_r") espFovCircleColor[0] = ParseFloat(val, espFovCircleColor[0]);
-            else if (key == "esp.fov_circle_color_g") espFovCircleColor[1] = ParseFloat(val, espFovCircleColor[1]);
-            else if (key == "esp.fov_circle_color_b") espFovCircleColor[2] = ParseFloat(val, espFovCircleColor[2]);
-            else if (key == "esp.fov_circle_color_a") espFovCircleColor[3] = ParseFloat(val, espFovCircleColor[3]);
-
-            else if (key == "removals.flash") removalsFlash = ParseBool(val);
-            else if (key == "removals.smoke") removalsSmoke = ParseBool(val);
-
-            else if (key == "bombtimer.enabled") bombTimerEnabled = ParseBool(val);
-            else if (key == "bombtimer.defuse") bombTimerDefuse = ParseBool(val);
-            else if (key == "bombtimer.site") bombTimerSite = ParseBool(val);
-            else if (key == "bombtimer.scale") bombTimerScale = ParseFloat(val, bombTimerScale);
-            else if (key == "bombtimer.color_r") bombTimerColor[0] = ParseFloat(val, bombTimerColor[0]);
-            else if (key == "bombtimer.color_g") bombTimerColor[1] = ParseFloat(val, bombTimerColor[1]);
-            else if (key == "bombtimer.color_b") bombTimerColor[2] = ParseFloat(val, bombTimerColor[2]);
-            else if (key == "bombtimer.color_a") bombTimerColor[3] = ParseFloat(val, bombTimerColor[3]);
-            else if (key == "bombtimer.defuse_color_r") bombTimerDefuseColor[0] = ParseFloat(val, bombTimerDefuseColor[0]);
-            else if (key == "bombtimer.defuse_color_g") bombTimerDefuseColor[1] = ParseFloat(val, bombTimerDefuseColor[1]);
-            else if (key == "bombtimer.defuse_color_b") bombTimerDefuseColor[2] = ParseFloat(val, bombTimerDefuseColor[2]);
-            else if (key == "bombtimer.defuse_color_a") bombTimerDefuseColor[3] = ParseFloat(val, bombTimerDefuseColor[3]);
-
-            else if (key == "world.skybox_enabled") skyboxEnabled = ParseBool(val);
-            else if (key == "world.skybox_index") skyboxIndex = ParseInt(val, skyboxIndex);
-
-            else if (key == "trigger.enabled") triggerEnabled = ParseBool(val);
-            else if (key == "trigger.key") triggerKey = ParseInt(val, triggerKey);
-            else if (key == "trigger.team_check") triggerTeamCheck = ParseBool(val);
-            else if (key == "trigger.hitboxes") triggerHitboxes = (uint32_t)ParseInt(val, (int)triggerHitboxes);
-            else if (key == "trigger.delay") triggerDelay = ParseInt(val, triggerDelay);
-
-            else if (key == "aim.enabled") aimEnabled = ParseBool(val);
-            else if (key == "aim.key") aimKey = ParseInt(val, aimKey);
-            else if (key == "aim.team_check") aimTeamCheck = ParseBool(val);
-            else if (key == "aim.hitboxes") aimHitboxes = (uint32_t)ParseInt(val, (int)aimHitboxes);
-            else if (key == "aim.fov") aimFov = ParseFloat(val, aimFov);
-            else if (key == "aim.smooth") aimSmooth = ParseInt(val, aimSmooth);
-            else if (key == "aim.on_accuracy") aimOnAccuracy = ParseBool(val);
-            else if (key == "aim.accuracy_speed") aimAccuracySpeed = ParseFloat(val, aimAccuracySpeed);
-
-            else if (key == "menu.key") menuKey = ParseInt(val, menuKey);
-            else if (key == "menu.accent_r") accent[0] = ParseFloat(val, accent[0]);
-            else if (key == "menu.accent_g") accent[1] = ParseFloat(val, accent[1]);
-            else if (key == "menu.accent_b") accent[2] = ParseFloat(val, accent[2]);
-
+            if (key.rfind("chams.", 0) == 0) {
+                ParseChamsKey(key, val, chams);
+            }
+            else if (key.rfind("esp.", 0) == 0) {
+                ParseEspKey(key, val, esp);
+            }
+            else if (TryParseRageKey(key, val, rageGroups)) {
+                continue;
+            }
             else {
-                for (int i = 0; i < (int)Rage::Group::Count; i++) {
-                    const std::string prefix = std::string("rage.") + kRageGroupKeys[i] + ".";
-                    if (key.rfind(prefix, 0) != 0) continue;
-
-                    const std::string suffix = key.substr(prefix.size());
-                    auto& rg = rageGroups[i];
-
-                    if (suffix == "enabled") rg.enabled = ParseBool(val);
-                    else if (suffix == "auto_shoot") rg.autoShoot = ParseBool(val);
-                    else if (suffix == "silent") rg.silent = ParseBool(val);
-                    else if (suffix == "no_spread") rg.noSpread = ParseBool(val);
-                    else if (suffix == "team_check") rg.teamCheck = ParseBool(val);
-                    else if (suffix == "min_damage") rg.minDamage = ParseInt(val, rg.minDamage);
-                    else if (suffix == "hitboxes") rg.hitboxes = (uint32_t)ParseInt(val, (int)rg.hitboxes);
-                    break;
-                }
+                ParseMiscKey(key, val, misc);
             }
         }
 
-        Chams::SetEnabled(chamsEnabled);
-        Chams::SetMaterial((Materials::Id)chamsMaterial);
-        Chams::SetOccluded(chamsOccluded);
-        Chams::SetTeamCheck(chamsTeamCheck);
-        Chams::SetColor(chamsColor);
+        Chams::SetEnabled(chams.enabled);
+        Chams::SetMaterial((Materials::Id)chams.material);
+        Chams::SetOccluded(chams.occluded);
+        Chams::SetTeamCheck(chams.teamCheck);
+        Chams::SetColor(chams.color);
 
-        Esp::SetEnabled(espEnabled);
-        Esp::SetTeamCheck(espTeamCheck);
-        Esp::SetBoxEnabled(espBoxEnabled);
-        Esp::SetBoxStyle(espBoxStyle);
-        Esp::SetBoxFillEnabled(espBoxFill);
-        Esp::SetBoxOutlineEnabled(espBoxOutline);
-        Esp::SetBoxCornerLength(espBoxCornerLength);
-        Esp::SetBoxVisibleColor(espBoxVisible);
-        Esp::SetBoxOccludedColor(espBoxOccluded);
-        Esp::SetBoxFillColor(espBoxFillColor);
+        Esp::SetEnabled(esp.enabled);
+        Esp::SetTeamCheck(esp.teamCheck);
+        Esp::SetBoxEnabled(esp.boxEnabled);
+        Esp::SetBoxStyle(esp.boxStyle);
+        Esp::SetBoxFillEnabled(esp.boxFill);
+        Esp::SetBoxOutlineEnabled(esp.boxOutline);
+        Esp::SetBoxCornerLength(esp.boxCornerLength);
+        Esp::SetBoxVisibleColor(esp.boxVisible);
+        Esp::SetBoxOccludedColor(esp.boxOccluded);
+        Esp::SetBoxFillColor(esp.boxFillColor);
 
-        Esp::SetHealthEnabled(espHealthEnabled);
-        Esp::SetHealthPosition(espHealthPosition);
-        Esp::SetHealthStyle(espHealthStyle);
-        Esp::SetHealthColor(espHealthColor);
-        Esp::SetHealthLowColor(espHealthLow);
-        Esp::SetHealthHighColor(espHealthHigh);
-        Esp::SetHealthShowValue(espHealthShowValue);
-        Esp::SetHealthThickness(espHealthThickness);
+        Esp::SetHealthEnabled(esp.healthEnabled);
+        Esp::SetHealthPosition(esp.healthPosition);
+        Esp::SetHealthStyle(esp.healthStyle);
+        Esp::SetHealthColor(esp.healthColor);
+        Esp::SetHealthLowColor(esp.healthLow);
+        Esp::SetHealthHighColor(esp.healthHigh);
+        Esp::SetHealthShowValue(esp.healthShowValue);
+        Esp::SetHealthThickness(esp.healthThickness);
 
-        Esp::SetAmmoEnabled(espAmmoEnabled);
-        Esp::SetAmmoPosition(espAmmoPosition);
-        Esp::SetAmmoColor(espAmmoColor);
-        Esp::SetAmmoShowValue(espAmmoShowValue);
-        Esp::SetAmmoThickness(espAmmoThickness);
+        Esp::SetAmmoEnabled(esp.ammoEnabled);
+        Esp::SetAmmoPosition(esp.ammoPosition);
+        Esp::SetAmmoColor(esp.ammoColor);
+        Esp::SetAmmoShowValue(esp.ammoShowValue);
+        Esp::SetAmmoThickness(esp.ammoThickness);
 
-        Esp::SetNameEnabled(espNameEnabled);
-        Esp::SetNamePosition(espNamePosition);
-        Esp::SetNameColor(espNameColor);
-        Esp::SetNameOccludedColor(espNameOccluded);
+        Esp::SetNameEnabled(esp.nameEnabled);
+        Esp::SetNamePosition(esp.namePosition);
+        Esp::SetNameColor(esp.nameColor);
+        Esp::SetNameOccludedColor(esp.nameOccluded);
 
-        Esp::SetSkeletonEnabled(espSkeletonEnabled);
-        Esp::SetSkeletonColor(espSkeletonColor);
-        Esp::SetSkeletonOccludedColor(espSkeletonOccluded);
-        Esp::SetSkeletonThickness(espSkeletonThickness);
-        Esp::SetSkeletonDebug(espSkeletonDebug);
+        Esp::SetSkeletonEnabled(esp.skeletonEnabled);
+        Esp::SetSkeletonColor(esp.skeletonColor);
+        Esp::SetSkeletonOccludedColor(esp.skeletonOccluded);
+        Esp::SetSkeletonThickness(esp.skeletonThickness);
+        Esp::SetSkeletonDebug(esp.skeletonDebug);
 
-        Esp::SetFovCircleEnabled(espFovCircleEnabled);
-        Esp::SetFovCircleColor(espFovCircleColor);
+        Esp::SetFovCircleEnabled(esp.fovCircleEnabled);
+        Esp::SetFovCircleColor(esp.fovCircleColor);
 
-        Removals::SetFlashEnabled(removalsFlash);
-        Removals::SetSmokeEnabled(removalsSmoke);
+        Removals::SetFlashEnabled(misc.removalsFlash);
+        Removals::SetSmokeEnabled(misc.removalsSmoke);
 
-        BombTimer::SetEnabled(bombTimerEnabled);
-        BombTimer::SetDefuseEnabled(bombTimerDefuse);
-        BombTimer::SetSiteEnabled(bombTimerSite);
-        BombTimer::SetScale(bombTimerScale);
-        BombTimer::SetColor(bombTimerColor);
-        BombTimer::SetDefuseColor(bombTimerDefuseColor);
+        BombTimer::SetEnabled(misc.bombTimerEnabled);
+        BombTimer::SetDefuseEnabled(misc.bombTimerDefuse);
+        BombTimer::SetSiteEnabled(misc.bombTimerSite);
+        BombTimer::SetScale(misc.bombTimerScale);
+        BombTimer::SetColor(misc.bombTimerColor);
+        BombTimer::SetDefuseColor(misc.bombTimerDefuseColor);
 
-        Skybox::SetEnabled(skyboxEnabled);
-        Skybox::SetSelectedIndex(skyboxIndex);
+        Skybox::SetEnabled(misc.skyboxEnabled);
+        Skybox::SetSelectedIndex(misc.skyboxIndex);
 
-        Triggerbot::SetEnabled(triggerEnabled);
-        Triggerbot::SetKey(triggerKey);
-        Triggerbot::SetTeamCheck(triggerTeamCheck);
-        Triggerbot::SetHitboxes(triggerHitboxes);
-        Triggerbot::SetDelayMs(triggerDelay);
+        ThirdPerson::SetEnabled(misc.thirdPersonEnabled);
+        ThirdPerson::SetKey(misc.thirdPersonKey);
+        ThirdPerson::SetDistance(misc.thirdPersonDistance);
 
-        Aim::SetEnabled(aimEnabled);
-        Aim::SetKey(aimKey);
-        Aim::SetTeamCheck(aimTeamCheck);
-        Aim::SetHitboxes(aimHitboxes);
-        Aim::SetFov(aimFov);
-        Aim::SetSmooth(aimSmooth);
-        Aim::SetOnAccuracy(aimOnAccuracy);
-        Aim::SetAccuracySpeed(aimAccuracySpeed);
+        Triggerbot::SetEnabled(misc.triggerEnabled);
+        Triggerbot::SetKey(misc.triggerKey);
+        Triggerbot::SetTeamCheck(misc.triggerTeamCheck);
+        Triggerbot::SetHitboxes(misc.triggerHitboxes);
+        Triggerbot::SetDelayMs(misc.triggerDelay);
+
+        Aim::SetEnabled(misc.aimEnabled);
+        Aim::SetKey(misc.aimKey);
+        Aim::SetTeamCheck(misc.aimTeamCheck);
+        Aim::SetHitboxes(misc.aimHitboxes);
+        Aim::SetFov(misc.aimFov);
+        Aim::SetSmooth(misc.aimSmooth);
+        Aim::SetOnAccuracy(misc.aimOnAccuracy);
+        Aim::SetAccuracySpeed(misc.aimAccuracySpeed);
 
         for (int i = 0; i < (int)Rage::Group::Count; i++) {
             const Rage::Group g = (Rage::Group)i;
@@ -597,8 +650,8 @@ namespace ConfigManager {
             Rage::SetHitboxes(g, rg.hitboxes);
         }
 
-        Renderer::SetMenuKey(menuKey);
-        Style::SetAccent(accent[0], accent[1], accent[2]);
+        Renderer::SetMenuKey(misc.menuKey);
+        Style::SetAccent(misc.accent[0], misc.accent[1], misc.accent[2]);
         Style::Apply();
 
         g_currentName = name;

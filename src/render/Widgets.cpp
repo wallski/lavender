@@ -92,6 +92,43 @@ namespace Widgets {
         return clicked;
     }
 
+    static void GetKeyName(int vk, char* out, size_t outSize) {
+        out[0] = '\0';
+
+        switch (vk) {
+        case 0:           strcpy_s(out, outSize, "None");    break;
+        case VK_LBUTTON:  strcpy_s(out, outSize, "Mouse1");  break;
+        case VK_RBUTTON:  strcpy_s(out, outSize, "Mouse2");  break;
+        case VK_MBUTTON:  strcpy_s(out, outSize, "Mouse3");  break;
+        case VK_XBUTTON1: strcpy_s(out, outSize, "Mouse4");  break;
+        case VK_XBUTTON2: strcpy_s(out, outSize, "Mouse5");  break;
+        case VK_INSERT:   strcpy_s(out, outSize, "Insert");  break;
+        case VK_DELETE:   strcpy_s(out, outSize, "Delete");  break;
+        case VK_HOME:     strcpy_s(out, outSize, "Home");    break;
+        case VK_END:      strcpy_s(out, outSize, "End");     break;
+        case VK_PRIOR:    strcpy_s(out, outSize, "PageUp");  break;
+        case VK_NEXT:     strcpy_s(out, outSize, "PageDn");  break;
+        case VK_SHIFT:    strcpy_s(out, outSize, "Shift");   break;
+        case VK_LSHIFT:   strcpy_s(out, outSize, "LShift");  break;
+        case VK_RSHIFT:   strcpy_s(out, outSize, "RShift");  break;
+        case VK_MENU:     strcpy_s(out, outSize, "Alt");     break;
+        case VK_LMENU:    strcpy_s(out, outSize, "LAlt");    break;
+        case VK_RMENU:    strcpy_s(out, outSize, "RAlt");    break;
+        case VK_CONTROL:  strcpy_s(out, outSize, "Ctrl");    break;
+        case VK_LCONTROL: strcpy_s(out, outSize, "LCtrl");   break;
+        case VK_RCONTROL: strcpy_s(out, outSize, "RCtrl");   break;
+        case VK_SPACE:    strcpy_s(out, outSize, "Space");   break;
+        case VK_TAB:      strcpy_s(out, outSize, "Tab");     break;
+        case VK_CAPITAL:  strcpy_s(out, outSize, "Caps");    break;
+        default: {
+            UINT sc = MapVirtualKeyA(vk, MAPVK_VK_TO_VSC);
+            if (sc && GetKeyNameTextA(sc << 16, out, (int)outSize)) break;
+            sprintf_s(out, outSize, "VK 0x%X", vk);
+            break;
+        }
+        }
+    }
+
     bool Keybind(const char* label, int* key) {
         ImGui::PushID(label);
         ImVec2 pos = ImGui::GetCursorScreenPos();
@@ -99,23 +136,32 @@ namespace Widgets {
         float rowH = Style::RowHeight;
 
         static ImGuiID s_capturing = 0;
+        static int s_captureFrame = 0;
         ImGuiID myId = ImGui::GetID("##kb");
 
         ImGui::InvisibleButton("##row", ImVec2(avail, rowH));
         bool clicked = ImGui::IsItemClicked();
         bool hovered = ImGui::IsItemHovered();
 
-        if (clicked) s_capturing = myId;
+        if (clicked) {
+            s_capturing = myId;
+            s_captureFrame = ImGui::GetFrameCount();
+        }
 
-        if (s_capturing == myId) {
+        bool changed = false;
+        if (s_capturing == myId && ImGui::GetFrameCount() > s_captureFrame) {
             for (int vk = 1; vk < 256; vk++) {
-                if (GetAsyncKeyState(vk) & 0x8000) {
-                    if (vk == VK_ESCAPE) { s_capturing = 0; break; }
-                    if (vk == VK_LBUTTON || vk == VK_RBUTTON || vk == VK_MBUTTON) continue;
-                    *key = vk;
-                    s_capturing = 0;
-                    break;
-                }
+                if (vk == VK_ESCAPE) continue;
+                if ((GetAsyncKeyState(vk) & 0x8000) == 0) continue;
+
+                *key = vk;
+                changed = true;
+                s_capturing = 0;
+                break;
+            }
+
+            if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                s_capturing = 0;
             }
         }
 
@@ -124,28 +170,9 @@ namespace Widgets {
         DrawRowHover(pos, avail, rowH, g_hoverAnim[hid]);
         DrawRowLabel(pos, rowH, label);
 
-        char keyName[32] = "None";
+        char keyName[32];
         if (s_capturing == myId) strcpy_s(keyName, "...");
-        else if (*key != 0) {
-            switch (*key) {
-            case VK_INSERT:  strcpy_s(keyName, "Insert");  break;
-            case VK_DELETE:  strcpy_s(keyName, "Delete");  break;
-            case VK_HOME:    strcpy_s(keyName, "Home");    break;
-            case VK_END:     strcpy_s(keyName, "End");     break;
-            case VK_SHIFT:   strcpy_s(keyName, "Shift");   break;
-            case VK_MENU:    strcpy_s(keyName, "Alt");     break;
-            case VK_CONTROL: strcpy_s(keyName, "Ctrl");    break;
-            case VK_SPACE:   strcpy_s(keyName, "Space");   break;
-            case VK_XBUTTON1: strcpy_s(keyName, "Mouse4"); break;
-            case VK_XBUTTON2: strcpy_s(keyName, "Mouse5"); break;
-            default: {
-                UINT sc = MapVirtualKeyA(*key, MAPVK_VK_TO_VSC);
-                if (!GetKeyNameTextA(sc << 16, keyName, sizeof(keyName)))
-                    sprintf_s(keyName, "VK 0x%X", *key);
-                break;
-            }
-            }
-        }
+        else GetKeyName(*key, keyName, sizeof(keyName));
 
         ImVec2 txtSize = ImGui::CalcTextSize(keyName);
         float boxW = txtSize.x + 20;
@@ -164,7 +191,7 @@ namespace Widgets {
             ImGui::GetColorU32(Style::Text), keyName);
 
         ImGui::PopID();
-        return clicked;
+        return changed;
     }
 
     bool ColorPicker(const char* label, float col[4]) {

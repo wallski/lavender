@@ -11,6 +11,7 @@
 #include "../core/features/visuals/removals/Removals.h"
 #include "../core/features/visuals/skybox/Skybox.h"
 #include "../core/features/visuals/bombtimer/BombTimer.h"
+#include "../core/features/visuals/thirdperson/ThirdPerson.h"
 #include "../core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "../core/features/combat/legit/aim/Aim.h"
 #include "../core/features/combat/rage/Rage.h"
@@ -695,6 +696,26 @@ namespace Menu {
         Widgets::EndCard();
     }
 
+    static void DrawThirdPersonCard() {
+        bool enabled = ThirdPerson::IsEnabled();
+        int key = ThirdPerson::GetKey();
+        float distance = ThirdPerson::GetDistance();
+
+        Widgets::BeginCard("THIRD PERSON", 3);
+
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            ThirdPerson::SetEnabled(enabled);
+        }
+        if (Widgets::Keybind("Toggle key", &key)) {
+            ThirdPerson::SetKey(key);
+        }
+        if (Widgets::SliderFloat("Distance", &distance, 40.0f, 300.0f, "%.0f")) {
+            ThirdPerson::SetDistance(distance);
+        }
+
+        Widgets::EndCard();
+    }
+
     static void DrawMiscTab() {
         const float totalW = ImGui::GetContentRegionAvail().x;
         const float gap = 10.0f;
@@ -724,6 +745,8 @@ namespace Menu {
             Removals::SetSmokeEnabled(smoke);
         }
         Widgets::EndCard();
+
+        DrawThirdPersonCard();
 
         ImGui::EndChild();
 
@@ -932,4 +955,4 @@ namespace Menu {
         ImGui::PopStyleVar();
     }
 
-}
+}   

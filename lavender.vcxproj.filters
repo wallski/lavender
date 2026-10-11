@@ -147,6 +147,9 @@
     <ClCompile Include="src\core\features\combat\rage\NoSpread.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\features\visuals\thirdperson\ThirdPerson.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\memory\PatternScan.h">
@@ -303,6 +306,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\features\combat\rage\NoSpread.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\features\visuals\thirdperson\ThirdPerson.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

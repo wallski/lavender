@@ -16,6 +16,7 @@
 #include "core/features/visuals/skybox/Skybox.h"
 #include "core/features/visuals/removals/Removals.h"
 #include "core/features/visuals/bombtimer/BombTimer.h"
+#include "core/features/visuals/thirdperson/ThirdPerson.h"
 #include "core/features/combat/CombatShared.h"
 #include "core/features/combat/Lagcomp.h"
 #include "core/features/combat/rage/Rage.h"
@@ -194,6 +195,7 @@ void MainThread(HMODULE hModule) {
 
     InputHelper::Initialize();
     CreateMoveHook::Initialize();
+    ThirdPerson::Initialize();
 
     Triggerbot::Initialize();
     Aim::Initialize();
@@ -223,6 +225,7 @@ void MainThread(HMODULE hModule) {
     Rage::Shutdown();
     Aim::Shutdown();
     Triggerbot::Shutdown();
+    ThirdPerson::Shutdown();
     CreateMoveHook::Shutdown();
     InputHelper::Shutdown();
     BombTimer::Shutdown();
