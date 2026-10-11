@@ -28,6 +28,7 @@ namespace Lagcomp {
         int tick = 0;
 
         bool valid = false;
+        bool wasValid = false;
         bool isApplied = false;
     };
 
@@ -36,9 +37,18 @@ namespace Lagcomp {
 
     void Run();
 
+    Record* GetOldestValid(uintptr_t pawn);
+    Record* GetOldestWasValid(uintptr_t pawn);
     std::vector<Record*> GetValidRecords(uintptr_t pawn);
+
     void Apply(Record& r);
     void Restore(Record& r);
 
     float GetMaxUnlag();
+
+    bool IsEnabled();
+    void SetEnabled(bool enabled);
+
+    int GetMaxTicks();
+    void SetMaxTicks(int ticks);
 }

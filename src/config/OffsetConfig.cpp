@@ -22,6 +22,38 @@ namespace OffsetConfig {
         return true;
     }
 
+    static bool IsWritableRange(uintptr_t addr, size_t size) {
+        if (addr < 0x10000) return false;
+        uintptr_t end = addr + size;
+        uintptr_t cur = addr;
+        while (cur < end) {
+            MEMORY_BASIC_INFORMATION mbi;
+            if (VirtualQuery((LPCVOID)cur, &mbi, sizeof(mbi)) == 0) return false;
+            if (mbi.State != MEM_COMMIT) return false;
+            if (mbi.Protect & (PAGE_GUARD | PAGE_NOACCESS)) return false;
+            if (mbi.Protect & (PAGE_READONLY | PAGE_EXECUTE_READ)) return false;
+            cur = reinterpret_cast<uintptr_t>(mbi.BaseAddress) + mbi.RegionSize;
+        }
+        return true;
+    }
+
+    static bool LooksLikeGlobalVarsPtr(uintptr_t ptrPtr, uintptr_t* outDeref) {
+        if (outDeref) *outDeref = 0;
+        if (!IsReadableRange(ptrPtr, sizeof(uintptr_t))) return false;
+
+        uintptr_t val = 0;
+        __try { val = *reinterpret_cast<uintptr_t*>(ptrPtr); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+
+        if (outDeref) *outDeref = val;
+        if (val < 0x10000 || val > 0x00007FFFFFFFFFFFULL) return false;
+
+        if (!IsReadableRange(val, 0x48)) return false;
+        if (!IsWritableRange(val + 0x30, 0x18)) return false;
+
+        return true;
+    }
+
     bool Load() {
         globals.dwEntityList = GeneratedOffsets::Globals::dwEntityList;
         globals.dwLocalPlayerController = GeneratedOffsets::Globals::dwLocalPlayerController;
@@ -119,19 +151,33 @@ namespace OffsetConfig {
             uintptr_t engineCandidate = rva + engineBase;
             uintptr_t clientCandidate = rva + clientBase;
 
-            if (IsReadableRange(engineCandidate, sizeof(uintptr_t))) {
-                globals.dwGlobalVars = engineCandidate;
-                printf("[OffsetConfig] dwGlobalVars: engine base OK (0x%llX)\n",
-                    (unsigned long long)engineCandidate);
-            }
-            else if (IsReadableRange(clientCandidate, sizeof(uintptr_t))) {
+            uintptr_t clientDeref = 0;
+            uintptr_t engineDeref = 0;
+
+            const bool clientOk = LooksLikeGlobalVarsPtr(clientCandidate, &clientDeref);
+            const bool engineOk = LooksLikeGlobalVarsPtr(engineCandidate, &engineDeref);
+
+            printf("[OffsetConfig] dwGlobalVars candidates:\n");
+            printf("[OffsetConfig]   client=0x%llX deref=0x%llX valid=%d\n",
+                (unsigned long long)clientCandidate,
+                (unsigned long long)clientDeref,
+                clientOk ? 1 : 0);
+            printf("[OffsetConfig]   engine=0x%llX deref=0x%llX valid=%d\n",
+                (unsigned long long)engineCandidate,
+                (unsigned long long)engineDeref,
+                engineOk ? 1 : 0);
+
+            if (clientOk) {
                 globals.dwGlobalVars = clientCandidate;
-                printf("[OffsetConfig] dwGlobalVars: client base OK (0x%llX)\n",
-                    (unsigned long long)clientCandidate);
+                printf("[OffsetConfig] dwGlobalVars: using client base\n");
+            }
+            else if (engineOk) {
+                globals.dwGlobalVars = engineCandidate;
+                printf("[OffsetConfig] dwGlobalVars: using engine base\n");
             }
             else {
-                globals.dwGlobalVars = engineCandidate;
-                printf("[OffsetConfig] dwGlobalVars: NEITHER candidate readable, keeping engine\n");
+                globals.dwGlobalVars = clientCandidate;
+                printf("[OffsetConfig] dwGlobalVars: neither candidate validated, fallback to client\n");
             }
             fflush(stdout);
         }

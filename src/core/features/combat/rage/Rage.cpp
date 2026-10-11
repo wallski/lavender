@@ -2,6 +2,7 @@
 #include "Rage.h"
 #include "NoSpread.h"
 #include "core/features/combat/CombatShared.h"
+#include "core/features/combat/Lagcomp.h"
 #include "core/systems/Tracing.h"
 #include "core/hooks/CreateMoveHook.h"
 #include "core/features/combat/legit/triggerbot/UsercmdLayout.h"
@@ -402,6 +403,7 @@ namespace Rage {
         math::vector3 angle{};
         int hitgroup = 0;
         bool valid = false;
+        Lagcomp::Record* record = nullptr;
     };
 
     static ScanResult DoScan(uintptr_t localPawn, const WeaponState& ws,
@@ -419,54 +421,105 @@ namespace Rage {
         const int teamCheck = (int)cfg.teamCheck;
         const int minDamage = (int)cfg.minDamage;
 
-        float bestFov = maxFov + 0.001f;
-        int bestPriority = -1;
+        const size_t hbCount = sizeof(kHitboxes) / sizeof(kHitboxes[0]);
+
+        float bestScore = -1.0f;
+        bool bestIsDirect = false;
+        int bestViewIndex = INT_MAX;
 
         for (const auto& e : enemies) {
             if (e.health <= 0) continue;
             if (teamCheck && e.team == localTeam) continue;
-            if (e.headPos.Length() < 1.0f) continue;
 
-            const size_t count = sizeof(kHitboxes) / sizeof(kHitboxes[0]);
-            for (size_t i = 0; i < count; i++) {
-                const auto& hb = kHitboxes[i];
-                if (!(mask & hb.flag)) continue;
-                if (hb.boneIndex < 0 || hb.boneIndex >= 32) continue;
+            auto records = Lagcomp::GetValidRecords(e.pawn);
 
-                const Vec3& bone = e.bones[hb.boneIndex];
-                if (bone.Length() < 1.0f) continue;
+            const int kMaxViews = 17;
+            Vec3 viewBones[kMaxViews][32];
+            Lagcomp::Record* viewRecord[kMaxViews] = {};
+            int viewCount = 0;
 
-                const Vec3 aimV = CombatShared::CalculateAngle(
-                    Vec3(eye.x, eye.y, eye.z), bone);
-                const float fov = CombatShared::AngleDistance(curV, aimV);
-
-                if (fov > maxFov) continue;
-
-                if (minDamage > 1) {
-                    if (!ws.valid) continue;
-                    const int est = EstimateDamage(ws, hb.hitgroup);
-                    if (est < minDamage) continue;
-                }
-
-                const math::vector3 boneM{ bone.x, bone.y, bone.z };
-
-                auto filter = Tracing::MakeFilter(localPawn, 0x1c3003, 4);
-                auto result = Tracing::Trace(eyeM, boneM, filter);
-
-                if (result.fraction < 0.97f && result.hitEntity != e.pawn) continue;
-
-                if (hb.priority > bestPriority ||
-                    (hb.priority == bestPriority && fov < bestFov)) {
-                    bestPriority = hb.priority;
-                    bestFov = fov;
-                    out.pawn = e.pawn;
-                    out.angle = math::vector3{ aimV.x, aimV.y, 0.0f };
-                    out.hitgroup = hb.hitgroup;
-                    out.valid = true;
-                }
-
-                break;
+            if (records.empty()) {
+                if (e.headPos.Length() < 1.0f) continue;
+                for (int i = 0; i < 32; i++) viewBones[0][i] = e.bones[i];
+                viewRecord[0] = nullptr;
+                viewCount = 1;
             }
+            else {
+                for (auto* r : records) {
+                    if (viewCount >= kMaxViews) break;
+                    const int n = (r->boneCount < 32) ? r->boneCount : 32;
+                    for (int i = 0; i < n; i++) viewBones[viewCount][i] = r->bones[i].position;
+                    for (int i = n; i < 32; i++) viewBones[viewCount][i] = Vec3();
+                    viewRecord[viewCount] = r;
+                    viewCount++;
+                }
+            }
+
+            bool directFoundForEnemy = false;
+
+            for (int vi = 0; vi < viewCount && !directFoundForEnemy; vi++) {
+                for (size_t i = 0; i < hbCount; i++) {
+                    const auto& hb = kHitboxes[i];
+                    if (!(mask & hb.flag)) continue;
+                    if (hb.boneIndex < 0 || hb.boneIndex >= 32) continue;
+
+                    const Vec3& bone = viewBones[vi][hb.boneIndex];
+                    if (bone.Length() < 1.0f) continue;
+
+                    const Vec3 aimV = CombatShared::CalculateAngle(
+                        Vec3(eye.x, eye.y, eye.z), bone);
+                    const float fov = CombatShared::AngleDistance(curV, aimV);
+
+                    if (fov > maxFov) continue;
+
+                    if (minDamage > 1) {
+                        if (!ws.valid) continue;
+                        const int est = EstimateDamage(ws, hb.hitgroup);
+                        if (est < minDamage) continue;
+                    }
+
+                    const math::vector3 boneM{ bone.x, bone.y, bone.z };
+
+                    auto filter = Tracing::MakeFilter(localPawn, 0x1c3003, 4);
+                    auto result = Tracing::Trace(eyeM, boneM, filter);
+
+                    const bool direct =
+                        (result.fraction >= 0.97f) ||
+                        (result.hitEntity == e.pawn);
+
+                    if (!direct) continue;
+
+                    directFoundForEnemy = true;
+
+                    const float score =
+                        (float)hb.priority * 10000.0f +
+                        5000.0f +
+                        (1000.0f - fov);
+
+                    bool better = false;
+                    if (score > bestScore + 0.01f) {
+                        better = true;
+                    }
+                    else if (fabsf(score - bestScore) < 0.01f && vi < bestViewIndex) {
+                        better = true;
+                    }
+
+                    if (better) {
+                        bestScore = score;
+                        bestIsDirect = true;
+                        bestViewIndex = vi;
+                        out.pawn = e.pawn;
+                        out.angle = math::vector3{ aimV.x, aimV.y, 0.0f };
+                        out.hitgroup = hb.hitgroup;
+                        out.valid = true;
+                        out.record = viewRecord[vi];
+                    }
+
+                    break;
+                }
+            }
+
+            (void)bestIsDirect;
         }
 
         return out;
@@ -601,18 +654,25 @@ namespace Rage {
         }
 
         if (res.valid) {
+            const int32_t renderTick = res.record ? (res.record->tick + 1) : 0;
+
             const int historySize = cmd->pb.input_history.current_size;
             for (int i = 0; i < historySize; ++i) {
                 auto* entry = GetInputHistoryEntry(cmd, i);
                 if (!entry) continue;
 
                 uintptr_t rawVa = reinterpret_cast<uintptr_t>(entry->m_view_angles);
-                if (rawVa < 0x10000) continue;
+                if (rawVa >= 0x10000) {
+                    auto* va = reinterpret_cast<proto::msg_qangle*>(rawVa + 0x10);
+                    va->set_x(writeAngle.x);
+                    va->set_y(writeAngle.y);
+                    va->set_z(writeAngle.z);
+                }
 
-                auto* va = reinterpret_cast<proto::msg_qangle*>(rawVa + 0x10);
-                va->set_x(writeAngle.x);
-                va->set_y(writeAngle.y);
-                va->set_z(writeAngle.z);
+                if (renderTick > 0) {
+                    entry->m_render_tick_count = renderTick;
+                    entry->m_render_tick_fraction = 0.0f;
+                }
             }
 
             if (!silent) {
