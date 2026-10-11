@@ -129,6 +129,14 @@ namespace Widgets {
         }
     }
 
+    static bool AnyKeyHeld() {
+        for (int vk = 1; vk < 256; vk++) {
+            if (vk == VK_ESCAPE) continue;
+            if (GetAsyncKeyState(vk) & 0x8000) return true;
+        }
+        return false;
+    }
+
     bool Keybind(const char* label, int* key) {
         ImGui::PushID(label);
         ImVec2 pos = ImGui::GetCursorScreenPos();
@@ -136,7 +144,8 @@ namespace Widgets {
         float rowH = Style::RowHeight;
 
         static ImGuiID s_capturing = 0;
-        static int s_captureFrame = 0;
+        static bool s_waitingRelease = false;
+
         ImGuiID myId = ImGui::GetID("##kb");
 
         ImGui::InvisibleButton("##row", ImVec2(avail, rowH));
@@ -145,23 +154,31 @@ namespace Widgets {
 
         if (clicked) {
             s_capturing = myId;
-            s_captureFrame = ImGui::GetFrameCount();
+            s_waitingRelease = true;
         }
 
         bool changed = false;
-        if (s_capturing == myId && ImGui::GetFrameCount() > s_captureFrame) {
-            for (int vk = 1; vk < 256; vk++) {
-                if (vk == VK_ESCAPE) continue;
-                if ((GetAsyncKeyState(vk) & 0x8000) == 0) continue;
 
-                *key = vk;
-                changed = true;
-                s_capturing = 0;
-                break;
-            }
-
+        if (s_capturing == myId) {
             if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                 s_capturing = 0;
+                s_waitingRelease = false;
+            }
+            else if (s_waitingRelease) {
+                if (!AnyKeyHeld()) {
+                    s_waitingRelease = false;
+                }
+            }
+            else {
+                for (int vk = 1; vk < 256; vk++) {
+                    if (vk == VK_ESCAPE) continue;
+                    if ((GetAsyncKeyState(vk) & 0x8000) == 0) continue;
+
+                    *key = vk;
+                    changed = true;
+                    s_capturing = 0;
+                    break;
+                }
             }
         }
 
@@ -171,7 +188,8 @@ namespace Widgets {
         DrawRowLabel(pos, rowH, label);
 
         char keyName[32];
-        if (s_capturing == myId) strcpy_s(keyName, "...");
+        if (s_capturing == myId && s_waitingRelease) strcpy_s(keyName, "release...");
+        else if (s_capturing == myId) strcpy_s(keyName, "...");
         else GetKeyName(*key, keyName, sizeof(keyName));
 
         ImVec2 txtSize = ImGui::CalcTextSize(keyName);
