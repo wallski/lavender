@@ -639,14 +639,25 @@ namespace Menu {
         Widgets::EndCard();
     }
 
+    static void DrawBacktrackSubTab() {
+        const float totalW = ImGui::GetContentRegionAvail().x;
+        const float gap = 10.0f;
+        const float colW = (totalW - gap) * 0.5f;
+
+        ImGui::BeginChild("##backtrack_col_left", ImVec2(colW, 0), false,
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        DrawBacktrackCard();
+        ImGui::EndChild();
+    }
+
     static void DrawVisualsTab() {
         DrawSubTabBar(kVisualsSubTabs, IM_ARRAYSIZE(kVisualsSubTabs), &g_visualsSubTab);
 
         switch (g_visualsSubTab) {
-        case 0: DrawChamsCard();     break;
-        case 1: DrawEspSubTab();     break;
-        case 2: DrawInfoSubTab();    break;
-        case 3: DrawBacktrackCard(); break;
+        case 0: DrawChamsCard();        break;
+        case 1: DrawEspSubTab();        break;
+        case 2: DrawInfoSubTab();       break;
+        case 3: DrawBacktrackSubTab();  break;
         }
     }
 
