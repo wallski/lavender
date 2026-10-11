@@ -108,12 +108,24 @@ namespace systems {
         }
 
         {
-            const auto game_type = CVar::GetInt("game_type");
-            const auto game_mode = CVar::GetInt("game_mode");
-            const auto is_ffa = (game_type == 1 && game_mode == 2) || (game_type == 2 && game_mode == 0);
+            static ULONGLONG s_lastGameModeCheck = 0;
+            static int s_cachedTeamMode = 1;
+            static bool s_cachedDeathmatch = false;
 
-            s.is_team_mode = !is_ffa;
-            this->m_is_deathmatch.store(game_type == 1 && game_mode == 2);
+            const ULONGLONG now = GetTickCount64();
+            if (now - s_lastGameModeCheck > 1000) {
+                s_lastGameModeCheck = now;
+
+                const auto game_type = CVar::GetInt("game_type");
+                const auto game_mode = CVar::GetInt("game_mode");
+                const auto is_ffa = (game_type == 1 && game_mode == 2) || (game_type == 2 && game_mode == 0);
+
+                s_cachedTeamMode = !is_ffa ? 1 : 0;
+                s_cachedDeathmatch = (game_type == 1 && game_mode == 2);
+            }
+
+            s.is_team_mode = (s_cachedTeamMode != 0);
+            this->m_is_deathmatch.store(s_cachedDeathmatch);
         }
 
         {

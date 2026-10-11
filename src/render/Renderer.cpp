@@ -228,7 +228,9 @@ namespace Renderer {
         UpdateMouseState();
         CombatShared::BeginFrame();
 
-        systems::g_entities.force_update();
+        if (systems::g_entities.is_empty()) {
+            systems::g_entities.force_update();
+        }
         systems::g_local.update();
 
         if (g_useLagcomp != 0) {

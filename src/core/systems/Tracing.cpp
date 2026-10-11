@@ -5,6 +5,9 @@
 
 namespace Tracing {
 
+    static CRITICAL_SECTION g_traceCs;
+    static bool g_traceCsInit = false;
+
     static uintptr_t g_traceRay = 0;
     static uintptr_t g_traceRayEntity = 0;
     static uintptr_t g_traceFilterInit = 0;
@@ -68,6 +71,11 @@ namespace Tracing {
     }
 
     bool Initialize() {
+        if (!g_traceCsInit) {
+            InitializeCriticalSection(&g_traceCs);
+            g_traceCsInit = true;
+        }
+
         g_traceRay = ResolveTraceRay();
         g_traceRayEntity = ResolveTraceRayEntity();
 
@@ -112,6 +120,11 @@ namespace Tracing {
         g_traceBulletDataInit = 0;
         g_traceBulletFree = 0;
         g_traceBulletUpdate = 0;
+
+        if (g_traceCsInit) {
+            DeleteCriticalSection(&g_traceCs);
+            g_traceCsInit = false;
+        }
     }
 
     Filter MakeFilter(uintptr_t skipEntity, uintptr_t mask, uint8_t layer, int type) {
@@ -137,8 +150,9 @@ namespace Tracing {
         uintptr_t manager = OffsetConfig::globals.dwGameTraceManager;
         if (!manager) return result;
 
-        Ray ray{};
+        EnterCriticalSection(&g_traceCs);
 
+        Ray ray{};
         __try {
             Memory::Call<bool>(g_traceRay, manager,
                 reinterpret_cast<uintptr_t>(&ray),
@@ -148,6 +162,8 @@ namespace Tracing {
                 reinterpret_cast<uintptr_t>(&result));
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
+
+        LeaveCriticalSection(&g_traceCs);
         return result;
     }
 
@@ -157,6 +173,8 @@ namespace Tracing {
 
         uintptr_t manager = OffsetConfig::globals.dwGameTraceManager;
         if (!manager) return result;
+
+        EnterCriticalSection(&g_traceCs);
 
         Ray ray{};
         ray.mins = mins;
@@ -172,6 +190,8 @@ namespace Tracing {
                 reinterpret_cast<uintptr_t>(&result));
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
+
+        LeaveCriticalSection(&g_traceCs);
         return result;
     }
 
@@ -181,6 +201,8 @@ namespace Tracing {
 
         uintptr_t manager = OffsetConfig::globals.dwGameTraceManager;
         if (!manager) return result;
+
+        EnterCriticalSection(&g_traceCs);
 
         Ray ray{};
         *reinterpret_cast<float*>(reinterpret_cast<uintptr_t>(&ray) + 12) = radius;
@@ -195,6 +217,8 @@ namespace Tracing {
                 reinterpret_cast<uintptr_t>(&result));
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
+
+        LeaveCriticalSection(&g_traceCs);
         return result;
     }
 
@@ -204,6 +228,8 @@ namespace Tracing {
 
         uintptr_t manager = OffsetConfig::globals.dwGameTraceManager;
         if (!manager) return result;
+
+        EnterCriticalSection(&g_traceCs);
 
         Ray ray{};
 
@@ -217,6 +243,8 @@ namespace Tracing {
                 reinterpret_cast<uintptr_t>(&result));
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
+
+        LeaveCriticalSection(&g_traceCs);
         return result;
     }
 
