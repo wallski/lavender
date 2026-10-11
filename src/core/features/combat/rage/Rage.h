@@ -32,6 +32,9 @@ namespace Rage {
     bool IsTeamCheck(Group g);
     void SetTeamCheck(Group g, bool enabled);
 
+    bool IsBacktrack(Group g);
+    void SetBacktrack(Group g, bool enabled);
+
     int GetMinDamage(Group g);
     void SetMinDamage(Group g, int damage);
 

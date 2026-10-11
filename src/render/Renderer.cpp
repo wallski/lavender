@@ -9,6 +9,7 @@
 #include "../core/features/visuals/esp/Esp.h"
 #include "../core/features/visuals/removals/Removals.h"
 #include "../core/features/visuals/bombtimer/BombTimer.h"
+#include "../core/features/visuals/backtrack/Backtrack.h"
 #include "../core/features/combat/CombatShared.h"
 #include "../core/features/combat/Lagcomp.h"
 #include "../core/features/combat/rage/Rage.h"
@@ -278,6 +279,7 @@ namespace Renderer {
         ImGui::NewFrame();
 
         Esp::Render();
+        Backtrack::Render();
         BombTimer::Render();
 
         float targetAlpha = (g_menuOpen && !g_unloadRequested) ? 1.0f : 0.0f;
@@ -327,4 +329,4 @@ namespace Renderer {
     bool ShouldUnload() { return g_readyToUnload; }
     int  GetMenuKey() { return Menu::GetMenuKey(); }
     void SetMenuKey(int key) { Menu::SetMenuKey(key); }
-}
+}   

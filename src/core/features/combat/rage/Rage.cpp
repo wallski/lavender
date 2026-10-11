@@ -25,6 +25,7 @@ namespace Rage {
         volatile LONG silent = 1;
         volatile LONG noSpread = 0;
         volatile LONG teamCheck = 1;
+        volatile LONG backtrack = 1;
         volatile LONG minDamage = 1;
         volatile LONG hitboxes = 0x1F;
     };
@@ -61,6 +62,10 @@ namespace Rage {
         { HB_LEGS,    17, 10,  6 },
         { HB_LEGS,    20, 10,  7 },
     };
+
+    static constexpr size_t kHitboxCount = sizeof(kHitboxes) / sizeof(kHitboxes[0]);
+    static constexpr int kMaxViewBones = 32;
+    static constexpr int kMaxViews = 16;
 
     struct InputHistoryEntryLayout {
         proto::has_bits m_has_bits;
@@ -382,153 +387,240 @@ namespace Rage {
         return ws;
     }
 
-    static int EstimateDamage(const WeaponState& ws, int hitgroup) {
-        if (!ws.valid || ws.damage <= 0) return 0;
-
-        float dmg = (float)ws.damage;
-
+    static float EstimateDamage(int baseDamage, int hitgroup) {
+        float dmg = (float)baseDamage;
         switch (hitgroup) {
-        case 1: dmg *= ws.headshotMultiplier; break;
+        case 1: dmg *= 4.0f; break;
         case 3: dmg *= 1.25f; break;
         case 6:
         case 7: dmg *= 0.75f; break;
         default: break;
         }
-
-        return (int)dmg;
+        return dmg;
     }
 
-    struct ScanResult {
-        uintptr_t pawn = 0;
-        math::vector3 angle{};
-        int hitgroup = 0;
-        bool valid = false;
-        Lagcomp::Record* record = nullptr;
-    };
-
-    static ScanResult DoScan(uintptr_t localPawn, const WeaponState& ws,
-        const Vec3& eye, const Vec3& curAngles, const WeaponSettings& cfg)
+    static bool RayHitsSphere(const math::vector3& origin, const math::vector3& dir,
+        const math::vector3& center, float radius)
     {
-        ScanResult out{};
+        const math::vector3 oc = origin - center;
+        const float b = oc.dot(dir);
+        const float c = oc.dot(oc) - radius * radius;
+        const float disc = b * b - c;
+        return disc >= 0.0f;
+    }
 
-        const math::vector3 eyeM{ eye.x, eye.y, eye.z };
-        const Vec3 curV{ curAngles.x, curAngles.y, 0.0f };
+    static float CalculateHitchance(const Vec3& shootPos, const math::vector3& aimAngle,
+        const Vec3& bonePos, float radius,
+        float inaccuracy, float spread, float recoilIndex,
+        int itemDefIdx, int numBullets)
+    {
+        const float total = inaccuracy + spread;
+        if (total < 0.0005f) return 1.0f;
 
-        const auto enemies = CombatShared::GetEnemiesCached();
-        const int localTeam = ReadTeam(localPawn);
-        const uint32_t mask = (uint32_t)cfg.hitboxes;
-        const float maxFov = 180.0f;
-        const int teamCheck = (int)cfg.teamCheck;
-        const int minDamage = (int)cfg.minDamage;
+        if (!NoSpread::IsReady()) return 1.0f;
 
-        const size_t hbCount = sizeof(kHitboxes) / sizeof(kHitboxes[0]);
+        constexpr int kSamples = 64;
 
-        float bestScore = -1.0f;
-        bool bestIsDirect = false;
-        int bestViewIndex = INT_MAX;
+        math::vector3 forward{}, left{}, up{};
+        math::helpers::angle_vectors_left(aimAngle, &forward, &left, &up);
 
-        for (const auto& e : enemies) {
-            if (e.health <= 0) continue;
-            if (teamCheck && e.team == localTeam) continue;
+        const math::vector3 origin{ shootPos.x, shootPos.y, shootPos.z };
+        const math::vector3 center{ bonePos.x, bonePos.y, bonePos.z };
 
-            auto records = Lagcomp::GetValidRecords(e.pawn);
+        int hits = 0;
+        for (int i = 0; i < kSamples; i++) {
+            const math::vector2 spr = NoSpread::CalculateSpread(
+                (uint32_t)i, itemDefIdx, numBullets, inaccuracy, spread, recoilIndex);
 
-            const int kMaxViews = 17;
-            Vec3 viewBones[kMaxViews][32];
-            Lagcomp::Record* viewRecord[kMaxViews] = {};
-            int viewCount = 0;
-
-            if (records.empty()) {
-                if (e.headPos.Length() < 1.0f) continue;
-                for (int i = 0; i < 32; i++) viewBones[0][i] = e.bones[i];
-                viewRecord[0] = nullptr;
-                viewCount = 1;
-            }
-            else {
-                for (auto* r : records) {
-                    if (viewCount >= kMaxViews) break;
-                    const int n = (r->boneCount < 32) ? r->boneCount : 32;
-                    for (int i = 0; i < n; i++) viewBones[viewCount][i] = r->bones[i].position;
-                    for (int i = n; i < 32; i++) viewBones[viewCount][i] = Vec3();
-                    viewRecord[viewCount] = r;
-                    viewCount++;
-                }
-            }
-
-            bool directFoundForEnemy = false;
-
-            for (int vi = 0; vi < viewCount && !directFoundForEnemy; vi++) {
-                for (size_t i = 0; i < hbCount; i++) {
-                    const auto& hb = kHitboxes[i];
-                    if (!(mask & hb.flag)) continue;
-                    if (hb.boneIndex < 0 || hb.boneIndex >= 32) continue;
-
-                    const Vec3& bone = viewBones[vi][hb.boneIndex];
-                    if (bone.Length() < 1.0f) continue;
-
-                    const Vec3 aimV = CombatShared::CalculateAngle(
-                        Vec3(eye.x, eye.y, eye.z), bone);
-                    const float fov = CombatShared::AngleDistance(curV, aimV);
-
-                    if (fov > maxFov) continue;
-
-                    if (minDamage > 1) {
-                        if (!ws.valid) continue;
-                        const int est = EstimateDamage(ws, hb.hitgroup);
-                        if (est < minDamage) continue;
-                    }
-
-                    const math::vector3 boneM{ bone.x, bone.y, bone.z };
-
-                    auto filter = Tracing::MakeFilter(localPawn, 0x1c3003, 4);
-                    auto result = Tracing::Trace(eyeM, boneM, filter);
-
-                    const bool direct =
-                        (result.fraction >= 0.97f) ||
-                        (result.hitEntity == e.pawn);
-
-                    if (!direct) continue;
-
-                    directFoundForEnemy = true;
-
-                    const float score =
-                        (float)hb.priority * 10000.0f +
-                        5000.0f +
-                        (1000.0f - fov);
-
-                    bool better = false;
-                    if (score > bestScore + 0.01f) {
-                        better = true;
-                    }
-                    else if (fabsf(score - bestScore) < 0.01f && vi < bestViewIndex) {
-                        better = true;
-                    }
-
-                    if (better) {
-                        bestScore = score;
-                        bestIsDirect = true;
-                        bestViewIndex = vi;
-                        out.pawn = e.pawn;
-                        out.angle = math::vector3{ aimV.x, aimV.y, 0.0f };
-                        out.hitgroup = hb.hitgroup;
-                        out.valid = true;
-                        out.record = viewRecord[vi];
-                    }
-
-                    break;
-                }
-            }
-
-            (void)bestIsDirect;
+            const math::vector3 dir = (forward + left * spr.x + up * spr.y).normalized();
+            if (RayHitsSphere(origin, dir, center, radius)) hits++;
         }
 
-        return out;
+        return (float)hits / (float)kSamples;
     }
 
-    static float EffectiveRecoil(const WeaponState& ws) {
-        if (ws.recoilIndex > 0.01f) return ws.recoilIndex;
-        if (ws.shotsFired > 0) return (float)ws.shotsFired;
-        return 0.0f;
+    struct ScanHit {
+        uintptr_t pawn = 0;
+        int health = 0;
+        int team = 0;
+        int boneIndex = -1;
+        int hitgroup = 0;
+        uint32_t hitboxFlag = 0;
+        Vec3 bonePos{};
+        math::vector3 aimAngle{};
+        float fov = 0.0f;
+        float damage = 0.0f;
+        float hitchance = 0.0f;
+        float score = 0.0f;
+        int priority = 0;
+        int tick = 0;
+        Lagcomp::Record* record = nullptr;
+        bool valid = false;
+    };
+
+    struct ScanView {
+        Vec3 bones[kMaxViewBones];
+        int count;
+        int tick;
+        Lagcomp::Record* record;
+    };
+
+    static void BuildViews(const CombatShared::Enemy& e, bool backtrackAllowed,
+        ScanView* views, int& outCount)
+    {
+        outCount = 0;
+
+        if (backtrackAllowed) {
+            auto records = Lagcomp::GetValidRecords(e.pawn);
+            if (!records.empty()) {
+                for (auto* r : records) {
+                    if (outCount >= kMaxViews) break;
+
+                    const int n = (r->boneCount < kMaxViewBones) ? r->boneCount : kMaxViewBones;
+                    for (int i = 0; i < n; i++) {
+                        views[outCount].bones[i] = r->bones[i].position;
+                    }
+                    for (int i = n; i < kMaxViewBones; i++) {
+                        views[outCount].bones[i] = Vec3();
+                    }
+
+                    views[outCount].count = n;
+                    views[outCount].tick = r->tick;
+                    views[outCount].record = r;
+                    outCount++;
+                }
+                return;
+            }
+        }
+
+        if (e.headPos.Length() < 1.0f) return;
+
+        for (int i = 0; i < kMaxViewBones; i++) {
+            views[0].bones[i] = e.bones[i];
+        }
+        views[0].count = kMaxViewBones;
+        views[0].tick = 0;
+        views[0].record = nullptr;
+        outCount = 1;
+    }
+
+    static void ScanEnemy(uintptr_t localPawn, const WeaponState& ws,
+        const Vec3& eye, const Vec3& curAngles, const WeaponSettings& cfg,
+        const CombatShared::Enemy& e, std::vector<ScanHit>& out)
+    {
+        const int localTeam = ReadTeam(localPawn);
+        if ((int)cfg.teamCheck && e.team == localTeam) return;
+
+        const uint32_t mask = (uint32_t)cfg.hitboxes;
+        const int minDamage = (int)cfg.minDamage;
+        const float maxFov = 180.0f;
+
+        const Vec3 curV{ curAngles.x, curAngles.y, 0.0f };
+        const math::vector3 eyeM{ eye.x, eye.y, eye.z };
+
+        ScanView views[kMaxViews];
+        int viewCount = 0;
+        BuildViews(e, cfg.backtrack != 0, views, viewCount);
+        if (viewCount == 0) return;
+
+        for (int vi = 0; vi < viewCount; vi++) {
+            const ScanView& v = views[vi];
+            bool directHitOnThisView = false;
+
+            for (size_t hi = 0; hi < kHitboxCount; hi++) {
+                const HitboxEntry& hb = kHitboxes[hi];
+                if (!(mask & hb.flag)) continue;
+                if (hb.boneIndex < 0 || hb.boneIndex >= v.count) continue;
+
+                const Vec3& bonePos = v.bones[hb.boneIndex];
+                if (bonePos.Length() < 1.0f) continue;
+
+                const Vec3 aimV = CombatShared::CalculateAngle(eye, bonePos);
+                const float fov = CombatShared::AngleDistance(curV, aimV);
+                if (fov > maxFov) continue;
+
+                const float dmg = EstimateDamage(ws.damage, hb.hitgroup);
+                if ((int)dmg < minDamage) continue;
+
+                const math::vector3 boneM{ bonePos.x, bonePos.y, bonePos.z };
+
+                auto filter = Tracing::MakeFilter(localPawn, 0x1c3003, 4);
+                auto result = Tracing::Trace(eyeM, boneM, filter);
+
+                const bool visible =
+                    (result.fraction >= 0.97f) ||
+                    (result.hitEntity == e.pawn);
+
+                if (!visible) continue;
+
+                ScanHit h{};
+                h.pawn = e.pawn;
+                h.health = e.health;
+                h.team = e.team;
+                h.boneIndex = hb.boneIndex;
+                h.hitgroup = hb.hitgroup;
+                h.hitboxFlag = hb.flag;
+                h.bonePos = bonePos;
+                h.aimAngle = math::vector3{ aimV.x, aimV.y, 0.0f };
+                h.fov = fov;
+                h.damage = dmg;
+                h.priority = hb.priority;
+                h.tick = v.tick;
+                h.record = v.record;
+                h.valid = true;
+
+                out.push_back(h);
+                directHitOnThisView = true;
+            }
+
+            if (directHitOnThisView) break;
+        }
+    }
+
+    static ScanHit SelectBest(const WeaponState& ws, const std::vector<ScanHit>& hits) {
+        ScanHit best{};
+
+        for (const auto& h : hits) {
+            if (!h.valid) continue;
+
+            const bool lethal = h.damage >= (float)h.health;
+            float score = 0.0f;
+
+            score += lethal ? 1000000.0f : 0.0f;
+            score += h.damage * 20.0f;
+            score += (float)h.priority * 50.0f;
+            score -= h.fov * 1.0f;
+
+            bool isBetter = !best.valid || score > best.score;
+            if (best.valid && std::fabs(score - best.score) < 0.01f) {
+                if (h.tick != best.tick) {
+                    isBetter = h.tick > best.tick;
+                }
+                else if (h.priority != best.priority) {
+                    isBetter = h.priority > best.priority;
+                }
+                else {
+                    isBetter = h.fov < best.fov;
+                }
+            }
+
+            if (isBetter) {
+                best = h;
+                best.score = score;
+                best.hitchance = 1.0f;
+
+                if (ws.valid && (ws.inaccuracy > 0.0005f || ws.spread > 0.0005f)) {
+                    const float radius = (h.hitboxFlag == HB_HEAD) ? 4.0f : 6.0f;
+                    best.hitchance = CalculateHitchance(
+                        Vec3(0.0f, 0.0f, 0.0f),
+                        h.aimAngle, h.bonePos, radius,
+                        ws.inaccuracy, ws.spread, ws.recoilIndex,
+                        ws.itemDefIdx, ws.numBullets);
+                }
+            }
+        }
+
+        return best;
     }
 
     static void OnCreateMoveInternal(void* cmdPtr) {
@@ -599,10 +691,20 @@ namespace Rage {
             return;
         }
 
-        ScanResult res = DoScan(localPawn, ws, eye, curAngles, cfg);
+        std::vector<ScanHit> hits;
+        const auto enemies = CombatShared::GetEnemiesCached();
+        hits.reserve(enemies.size() * 4);
+
+        for (const auto& e : enemies) {
+            if (e.health <= 0) continue;
+            if (!e.pawn) continue;
+            ScanEnemy(localPawn, ws, eye, curAngles, cfg, e, hits);
+        }
+
+        ScanHit best = SelectBest(ws, hits);
 
         const bool autoShoot = (cfg.autoShoot != 0);
-        const bool wantFire = autoShoot && res.valid;
+        const bool wantFire = autoShoot && best.valid;
 
         const uintptr_t lc = CombatShared::GetLocalController();
         const int tickBase = ReadTickBase(lc);
@@ -616,13 +718,13 @@ namespace Rage {
 
         const math::vector3 userAngleVec{ curAngles.x, curAngles.y, 0.0f };
         const bool silent = (cfg.silent != 0);
-        math::vector3 writeAngle = res.valid ? res.angle : userAngleVec;
+        math::vector3 writeAngle = best.valid ? best.aimAngle : userAngleVec;
 
         if (canFire && cfg.noSpread != 0) {
             WeaponState wsAcc = GetWeaponStateWithAccuracy(localPawn, tickBase);
 
             if (wsAcc.valid && tickBase > 0) {
-                const float recoil = EffectiveRecoil(wsAcc);
+                const float recoil = wsAcc.recoilIndex > 0.01f ? wsAcc.recoilIndex : (float)wsAcc.shotsFired;
 
                 if (recoil > 0.5f || wsAcc.inaccuracy > 0.001f || wsAcc.spread > 0.001f) {
                     const math::vector3 corrected = NoSpread::Correct(
@@ -638,7 +740,7 @@ namespace Rage {
         }
 
         auto* base = GetProtobufBase(cmd);
-        if (base && res.valid) {
+        if (base && best.valid) {
             if (auto* va = base->mutable_viewangles()) {
                 if (silent) {
                     va->set_x(userAngleVec.x);
@@ -653,8 +755,8 @@ namespace Rage {
             }
         }
 
-        if (res.valid) {
-            const int32_t renderTick = res.record ? (res.record->tick + 1) : 0;
+        if (best.valid) {
+            const int32_t renderTick = best.record ? (best.tick + 1) : 0;
 
             const int historySize = cmd->pb.input_history.current_size;
             for (int i = 0; i < historySize; ++i) {
@@ -735,6 +837,9 @@ namespace Rage {
 
     bool IsTeamCheck(Group g) { return g_weapons[(int)g].teamCheck != 0; }
     void SetTeamCheck(Group g, bool enabled) { InterlockedExchange(&g_weapons[(int)g].teamCheck, enabled ? 1 : 0); }
+
+    bool IsBacktrack(Group g) { return g_weapons[(int)g].backtrack != 0; }
+    void SetBacktrack(Group g, bool enabled) { InterlockedExchange(&g_weapons[(int)g].backtrack, enabled ? 1 : 0); }
 
     int GetMinDamage(Group g) { return (int)g_weapons[(int)g].minDamage; }
     void SetMinDamage(Group g, int damage) {

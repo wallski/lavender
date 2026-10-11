@@ -10,6 +10,8 @@
 #include <cmath>
 #include <algorithm>
 
+#define LAGCOMP_VERBOSE_LOG 0
+
 namespace Lagcomp {
 
     static uintptr_t g_setMeshGroup = 0;
@@ -24,16 +26,6 @@ namespace Lagcomp {
 
     static float g_cachedLatency = 0.0f;
     static float g_cachedMaxUnlag = 0.2f;
-
-    static volatile LONG g_failGsn = 0;
-    static volatile LONG g_failBoneCache = 0;
-    static volatile LONG g_failBoneCount = 0;
-    static volatile LONG g_failSimTime = 0;
-    static volatile LONG g_failGlobalVars = 0;
-    static volatile LONG g_failGsnWrite = 0;
-    static volatile LONG g_failFreshCache = 0;
-    static volatile LONG g_failBonesCopy = 0;
-    static volatile LONG g_successCount = 0;
 
     void OnCreateMove(void* cmd);
 
@@ -167,22 +159,22 @@ namespace Lagcomp {
         out.pawn = pawn;
 
         uintptr_t gsn = 0;
-        if (!SafeReadPtr(pawn + gsnOff, &gsn)) { InterlockedIncrement(&g_failGsn); return false; }
-        if (gsn < 0x10000) { InterlockedIncrement(&g_failGsn); return false; }
+        if (!SafeReadPtr(pawn + gsnOff, &gsn)) return false;
+        if (gsn < 0x10000) return false;
         out.gameSceneNode = gsn;
 
         uintptr_t boneCache = 0;
-        if (!SafeReadPtr(gsn + modelStateOff + 0x80, &boneCache)) { InterlockedIncrement(&g_failBoneCache); return false; }
-        if (boneCache < 0x10000) { InterlockedIncrement(&g_failBoneCache); return false; }
+        if (!SafeReadPtr(gsn + modelStateOff + 0x80, &boneCache)) return false;
+        if (boneCache < 0x10000) return false;
 
         int boneCount = 0;
-        if (!SafeReadI32(gsn + modelStateOff + 0x8c, &boneCount)) { InterlockedIncrement(&g_failBoneCount); return false; }
-        if (boneCount <= 0) { InterlockedIncrement(&g_failBoneCount); return false; }
+        if (!SafeReadI32(gsn + modelStateOff + 0x8c, &boneCount)) return false;
+        if (boneCount <= 0) return false;
         if (boneCount > kMaxBones) boneCount = kMaxBones;
 
         float simTime = 0.0f;
-        if (!SafeReadF32(pawn + simTimeOff, &simTime)) { InterlockedIncrement(&g_failSimTime); return false; }
-        if (!(simTime > 0.0f) || !(simTime < 1000000.0f)) { InterlockedIncrement(&g_failSimTime); return false; }
+        if (!SafeReadF32(pawn + simTimeOff, &simTime)) return false;
+        if (!(simTime > 0.0f) || !(simTime < 1000000.0f)) return false;
         out.simTime = simTime;
 
         if (absOriginOff) {
@@ -197,7 +189,7 @@ namespace Lagcomp {
         out.boneCount = boneCount;
 
         uintptr_t globalVars = GetGlobalVars();
-        if (!globalVars) { InterlockedIncrement(&g_failGlobalVars); return false; }
+        if (!globalVars) return false;
 
         float backupTime = 0.0f;
         int backupTick = 0;
@@ -212,7 +204,7 @@ namespace Lagcomp {
             *reinterpret_cast<float*>(globalVars + 0x30) = simTime;
             *reinterpret_cast<int*>(globalVars + 0x44) = out.tick;
         }
-        __except (EXCEPTION_EXECUTE_HANDLER) { InterlockedIncrement(&g_failGsnWrite); return false; }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 
         if (g_setMeshGroup) {
             using Fn = void(*)(uintptr_t, uintptr_t);
@@ -233,8 +225,8 @@ namespace Lagcomp {
         __except (EXCEPTION_EXECUTE_HANDLER) {}
 
         uintptr_t freshCache = 0;
-        if (!SafeReadPtr(gsn + modelStateOff + 0x80, &freshCache)) { InterlockedIncrement(&g_failFreshCache); return false; }
-        if (freshCache < 0x10000) { InterlockedIncrement(&g_failFreshCache); return false; }
+        if (!SafeReadPtr(gsn + modelStateOff + 0x80, &freshCache)) return false;
+        if (freshCache < 0x10000) return false;
         out.boneCache = freshCache;
 
         __try {
@@ -242,9 +234,8 @@ namespace Lagcomp {
                 out.bones[i] = *reinterpret_cast<BoneData*>(freshCache + i * sizeof(BoneData));
             }
         }
-        __except (EXCEPTION_EXECUTE_HANDLER) { InterlockedIncrement(&g_failBonesCopy); return false; }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 
-        InterlockedIncrement(&g_successCount);
         out.valid = true;
         return true;
     }
@@ -318,6 +309,7 @@ namespace Lagcomp {
         (void)cmd;
         CollectRecords();
 
+#if LAGCOMP_VERBOSE_LOG
         static ULONGLONG s_lastLog = 0;
         ULONGLONG now = GetTickCount64();
         if (now - s_lastLog >= 1000) {
@@ -331,15 +323,13 @@ namespace Lagcomp {
                 if ((int)entry.second.size() > maxSize) maxSize = (int)entry.second.size();
             }
 
-            printf("[Lagcomp] %zu recs / %zu enemies (max %d) lat=%.1fms bud=%.1fms | gsn=%ld bc=%ld cnt=%ld st=%ld gv=%ld gw=%ld fc=%ld bones=%ld ok=%ld\n",
+            printf("[Lagcomp] %zu recs / %zu enemies (max %d) lat=%.1fms bud=%.1fms\n",
                 total, g_records.size(), maxSize,
                 g_cachedLatency * 1000.0f,
-                (g_cachedMaxUnlag - (g_cachedLatency > 0.0f ? g_cachedLatency : 0.0f)) * 1000.0f,
-                g_failGsn, g_failBoneCache, g_failBoneCount, g_failSimTime,
-                g_failGlobalVars, g_failGsnWrite, g_failFreshCache, g_failBonesCopy,
-                g_successCount);
+                (g_cachedMaxUnlag - (g_cachedLatency > 0.0f ? g_cachedLatency : 0.0f)) * 1000.0f);
             fflush(stdout);
         }
+#endif
     }
 
     float GetMaxUnlag() {

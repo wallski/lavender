@@ -12,9 +12,11 @@
 #include "../core/features/visuals/skybox/Skybox.h"
 #include "../core/features/visuals/bombtimer/BombTimer.h"
 #include "../core/features/visuals/thirdperson/ThirdPerson.h"
+#include "../core/features/visuals/backtrack/Backtrack.h"
 #include "../core/features/combat/legit/triggerbot/Triggerbot.h"
 #include "../core/features/combat/legit/aim/Aim.h"
 #include "../core/features/combat/rage/Rage.h"
+#include "../core/features/combat/Lagcomp.h"
 #include "../core/config/ConfigManager.h"
 
 namespace Menu {
@@ -28,7 +30,7 @@ namespace Menu {
     static std::string g_pendingDelete;
 
     static const char* kLegitSubTabs[] = { "Aim", "Trigger" };
-    static const char* kVisualsSubTabs[] = { "Chams", "ESP", "Info" };
+    static const char* kVisualsSubTabs[] = { "Chams", "ESP", "Info", "Backtrack" };
     static const char* kRageSubTabs[] = { "Pistol", "SMG", "Rifle", "Shotgun", "Sniper", "LMG" };
 
     static const char* kMaterialNames[] = {
@@ -121,9 +123,10 @@ namespace Menu {
         bool silent = Rage::IsSilent(g);
         bool noSpread = Rage::IsNoSpread(g);
         bool teamCheck = Rage::IsTeamCheck(g);
+        bool backtrack = Rage::IsBacktrack(g);
         int minDamage = Rage::GetMinDamage(g);
 
-        Widgets::BeginCard("WEAPON", 6);
+        Widgets::BeginCard("WEAPON", 7);
 
         if (Widgets::Toggle("Enabled", &enabled)) {
             Rage::SetEnabled(g, enabled);
@@ -139,6 +142,9 @@ namespace Menu {
         }
         if (Widgets::Toggle("Team check", &teamCheck)) {
             Rage::SetTeamCheck(g, teamCheck);
+        }
+        if (Widgets::Toggle("Backtrack", &backtrack)) {
+            Rage::SetBacktrack(g, backtrack);
         }
         if (Widgets::SliderInt("Min damage", &minDamage, 1, 130)) {
             Rage::SetMinDamage(g, minDamage);
@@ -599,13 +605,48 @@ namespace Menu {
         ImGui::EndChild();
     }
 
+    static void DrawBacktrackCard() {
+        bool enabled = Backtrack::IsEnabled();
+        bool teamCheck = Backtrack::IsTeamCheck();
+        float visibleColor[4];
+        float occludedColor[4];
+        memcpy(visibleColor, Backtrack::GetVisibleColor(), sizeof(visibleColor));
+        memcpy(occludedColor, Backtrack::GetOccludedColor(), sizeof(occludedColor));
+        float thickness = Backtrack::GetThickness();
+        int maxTicks = Lagcomp::GetMaxTicks();
+
+        Widgets::BeginCard("BACKTRACK", 6);
+
+        if (Widgets::Toggle("Enabled", &enabled)) {
+            Backtrack::SetEnabled(enabled);
+        }
+        if (Widgets::Toggle("Team check", &teamCheck)) {
+            Backtrack::SetTeamCheck(teamCheck);
+        }
+        if (Widgets::SliderInt("Max ticks", &maxTicks, 1, 16)) {
+            Lagcomp::SetMaxTicks(maxTicks);
+        }
+        if (Widgets::ColorPicker("Visible color", visibleColor)) {
+            Backtrack::SetVisibleColor(visibleColor);
+        }
+        if (Widgets::ColorPicker("Occluded color", occludedColor)) {
+            Backtrack::SetOccludedColor(occludedColor);
+        }
+        if (Widgets::SliderFloat("Thickness", &thickness, 0.5f, 5.0f, "%.1f")) {
+            Backtrack::SetThickness(thickness);
+        }
+
+        Widgets::EndCard();
+    }
+
     static void DrawVisualsTab() {
         DrawSubTabBar(kVisualsSubTabs, IM_ARRAYSIZE(kVisualsSubTabs), &g_visualsSubTab);
 
         switch (g_visualsSubTab) {
-        case 0: DrawChamsCard();    break;
-        case 1: DrawEspSubTab();    break;
-        case 2: DrawInfoSubTab();   break;
+        case 0: DrawChamsCard();     break;
+        case 1: DrawEspSubTab();     break;
+        case 2: DrawInfoSubTab();    break;
+        case 3: DrawBacktrackCard(); break;
         }
     }
 
@@ -955,4 +996,4 @@ namespace Menu {
         ImGui::PopStyleVar();
     }
 
-}   
+}

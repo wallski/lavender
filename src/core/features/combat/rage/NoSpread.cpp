@@ -15,7 +15,7 @@ namespace NoSpread {
         return instr + 5 + static_cast<intptr_t>(rel);
     }
 
-    static uint32_t GetSeed(const math::vector3& angles, int tick) {
+    uint32_t GetSeed(const math::vector3& angles, int tick) {
         if (!g_getTickViewAngles) return 0;
         using Fn = uint32_t(*)(void*, const math::vector3*, int);
         auto fn = reinterpret_cast<Fn>(g_getTickViewAngles);
@@ -23,16 +23,16 @@ namespace NoSpread {
         __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
     }
 
-    static math::vector2 CalcSpread(int seed, float accuracy, float spread,
-        float recoilIndex, int itemDefIdx, int numBullets)
+    math::vector2 CalculateSpread(uint32_t seed, int itemDefIdx, int numBullets,
+        float inaccuracy, float spread, float recoilIndex)
     {
         math::vector2 out{};
         if (!g_calculateSpread) return out;
         using Fn = void(*)(int16_t, int, int, uint32_t, float, float, float, float*, float*);
         auto fn = reinterpret_cast<Fn>(g_calculateSpread);
         __try {
-            fn((int16_t)itemDefIdx, numBullets, 0, (uint32_t)(seed + 1),
-                accuracy, spread, recoilIndex, &out.x, &out.y);
+            fn((int16_t)itemDefIdx, numBullets, 0, seed + 1u,
+                inaccuracy, spread, recoilIndex, &out.x, &out.y);
         }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
         return out;
@@ -71,20 +71,18 @@ namespace NoSpread {
 
         constexpr float kRadToDeg = 180.0f / 3.14159265f;
 
-        for (int i = 0; i < 360; i++) {
-            const math::vector3 testAngles{ (float)i, aimAngle.y, 0.0f };
+        for (int i = 0; i < 720; i++) {
+            const math::vector3 testAngles{ (float)i / 2.0f, aimAngle.y, 0.0f };
             const uint32_t seed = GetSeed(testAngles, tick);
             if (!seed) continue;
 
-            const math::vector2 spr = CalcSpread(seed,
-                inaccuracy, spread, recoilIndex, itemDefIdx, numBullets);
+            const math::vector2 spr = CalculateSpread(seed,
+                itemDefIdx, numBullets, inaccuracy, spread, recoilIndex);
 
             const float mag = std::sqrt(spr.x * spr.x + spr.y * spr.y);
 
             math::vector3 adjusted = aimAngle;
-            if (mag > 0.0001f) {
-                adjusted.x += std::atan(mag) * kRadToDeg;
-            }
+            adjusted.x += std::atan(mag) * kRadToDeg;
             adjusted.z = -std::atan2(spr.x, spr.y) * kRadToDeg;
 
             if (GetSeed(adjusted, tick) == seed) {

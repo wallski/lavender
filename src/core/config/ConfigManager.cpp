@@ -7,6 +7,8 @@
 #include "../features/visuals/skybox/Skybox.h"
 #include "../features/visuals/bombtimer/BombTimer.h"
 #include "../features/visuals/thirdperson/ThirdPerson.h"
+#include "../features/visuals/backtrack/Backtrack.h"
+#include "../features/combat/Lagcomp.h"
 #include "../features/combat/legit/triggerbot/Triggerbot.h"
 #include "../features/combat/legit/aim/Aim.h"
 #include "../features/combat/rage/Rage.h"
@@ -30,6 +32,7 @@ namespace ConfigManager {
         bool silent = true;
         bool noSpread = false;
         bool teamCheck = true;
+        bool backtrack = true;
         int minDamage = 1;
         uint32_t hitboxes = 0x1F;
     };
@@ -82,6 +85,14 @@ namespace ConfigManager {
 
         bool fovCircleEnabled = false;
         float fovCircleColor[4] = { 0.659f, 0.333f, 0.969f, 0.85f };
+    };
+
+    struct BacktrackData {
+        bool enabled = false;
+        bool teamCheck = true;
+        float visibleColor[4] = { 0.659f, 0.333f, 0.969f, 1.00f };
+        float occludedColor[4] = { 1.000f, 0.400f, 0.400f, 1.00f };
+        float thickness = 1.5f;
     };
 
     struct MiscData {
@@ -177,6 +188,7 @@ namespace ConfigManager {
             else if (suffix == "silent") rg.silent = ParseBool(val);
             else if (suffix == "no_spread") rg.noSpread = ParseBool(val);
             else if (suffix == "team_check") rg.teamCheck = ParseBool(val);
+            else if (suffix == "backtrack") rg.backtrack = ParseBool(val);
             else if (suffix == "min_damage") rg.minDamage = ParseInt(val, rg.minDamage);
             else if (suffix == "hitboxes") rg.hitboxes = (uint32_t)ParseInt(val, (int)rg.hitboxes);
             return true;
@@ -193,6 +205,20 @@ namespace ConfigManager {
         else if (key == "chams.color_g") d.color[1] = ParseFloat(val, d.color[1]);
         else if (key == "chams.color_b") d.color[2] = ParseFloat(val, d.color[2]);
         else if (key == "chams.color_a") d.color[3] = ParseFloat(val, d.color[3]);
+    }
+
+    static void ParseBacktrackKey(const std::string& key, const std::string& val, BacktrackData& d) {
+        if (key == "backtrack.enabled") d.enabled = ParseBool(val);
+        else if (key == "backtrack.team_check") d.teamCheck = ParseBool(val);
+        else if (key == "backtrack.color_r") d.visibleColor[0] = ParseFloat(val, d.visibleColor[0]);
+        else if (key == "backtrack.color_g") d.visibleColor[1] = ParseFloat(val, d.visibleColor[1]);
+        else if (key == "backtrack.color_b") d.visibleColor[2] = ParseFloat(val, d.visibleColor[2]);
+        else if (key == "backtrack.color_a") d.visibleColor[3] = ParseFloat(val, d.visibleColor[3]);
+        else if (key == "backtrack.occluded_r") d.occludedColor[0] = ParseFloat(val, d.occludedColor[0]);
+        else if (key == "backtrack.occluded_g") d.occludedColor[1] = ParseFloat(val, d.occludedColor[1]);
+        else if (key == "backtrack.occluded_b") d.occludedColor[2] = ParseFloat(val, d.occludedColor[2]);
+        else if (key == "backtrack.occluded_a") d.occludedColor[3] = ParseFloat(val, d.occludedColor[3]);
+        else if (key == "backtrack.thickness") d.thickness = ParseFloat(val, d.thickness);
     }
 
     static bool ParseEspKey(const std::string& key, const std::string& val, EspData& d) {
@@ -314,6 +340,8 @@ namespace ConfigManager {
         else if (key == "aim.smooth") d.aimSmooth = ParseInt(val, d.aimSmooth);
         else if (key == "aim.on_accuracy") d.aimOnAccuracy = ParseBool(val);
         else if (key == "aim.accuracy_speed") d.aimAccuracySpeed = ParseFloat(val, d.aimAccuracySpeed);
+
+        else if (key == "lagcomp.max_ticks") d.menuKey = d.menuKey;
 
         else if (key == "menu.key") d.menuKey = ParseInt(val, d.menuKey);
         else if (key == "menu.accent_r") d.accent[0] = ParseFloat(val, d.accent[0]);
@@ -460,6 +488,22 @@ namespace ConfigManager {
         f << "esp.fov_circle_color_b=" << fcc[2] << "\n";
         f << "esp.fov_circle_color_a=" << fcc[3] << "\n";
 
+        f << "backtrack.enabled=" << (Backtrack::IsEnabled() ? 1 : 0) << "\n";
+        f << "backtrack.team_check=" << (Backtrack::IsTeamCheck() ? 1 : 0) << "\n";
+        const float* bvc = Backtrack::GetVisibleColor();
+        f << "backtrack.color_r=" << bvc[0] << "\n";
+        f << "backtrack.color_g=" << bvc[1] << "\n";
+        f << "backtrack.color_b=" << bvc[2] << "\n";
+        f << "backtrack.color_a=" << bvc[3] << "\n";
+        const float* boc = Backtrack::GetOccludedColor();
+        f << "backtrack.occluded_r=" << boc[0] << "\n";
+        f << "backtrack.occluded_g=" << boc[1] << "\n";
+        f << "backtrack.occluded_b=" << boc[2] << "\n";
+        f << "backtrack.occluded_a=" << boc[3] << "\n";
+        f << "backtrack.thickness=" << Backtrack::GetThickness() << "\n";
+
+        f << "lagcomp.max_ticks=" << Lagcomp::GetMaxTicks() << "\n";
+
         f << "removals.flash=" << (Removals::IsFlashEnabled() ? 1 : 0) << "\n";
         f << "removals.smoke=" << (Removals::IsSmokeEnabled() ? 1 : 0) << "\n";
 
@@ -509,6 +553,7 @@ namespace ConfigManager {
             f << prefix << "silent=" << (Rage::IsSilent(g) ? 1 : 0) << "\n";
             f << prefix << "no_spread=" << (Rage::IsNoSpread(g) ? 1 : 0) << "\n";
             f << prefix << "team_check=" << (Rage::IsTeamCheck(g) ? 1 : 0) << "\n";
+            f << prefix << "backtrack=" << (Rage::IsBacktrack(g) ? 1 : 0) << "\n";
             f << prefix << "min_damage=" << Rage::GetMinDamage(g) << "\n";
             f << prefix << "hitboxes=" << (unsigned int)Rage::GetHitboxes(g) << "\n";
         }
@@ -528,7 +573,9 @@ namespace ConfigManager {
 
         ChamsData chams;
         EspData esp;
+        BacktrackData backtrackData;
         MiscData misc;
+        int lagcompMaxTicks = Lagcomp::GetMaxTicks();
         RageGroupData rageGroups[(int)Rage::Group::Count];
 
         std::string line;
@@ -545,11 +592,17 @@ namespace ConfigManager {
             std::string key = line.substr(0, eq);
             std::string val = line.substr(eq + 1);
 
-            if (key.rfind("chams.", 0) == 0) {
+            if (key == "lagcomp.max_ticks") {
+                lagcompMaxTicks = ParseInt(val, lagcompMaxTicks);
+            }
+            else if (key.rfind("chams.", 0) == 0) {
                 ParseChamsKey(key, val, chams);
             }
             else if (key.rfind("esp.", 0) == 0) {
                 ParseEspKey(key, val, esp);
+            }
+            else if (key.rfind("backtrack.", 0) == 0) {
+                ParseBacktrackKey(key, val, backtrackData);
             }
             else if (TryParseRageKey(key, val, rageGroups)) {
                 continue;
@@ -605,6 +658,14 @@ namespace ConfigManager {
         Esp::SetFovCircleEnabled(esp.fovCircleEnabled);
         Esp::SetFovCircleColor(esp.fovCircleColor);
 
+        Backtrack::SetEnabled(backtrackData.enabled);
+        Backtrack::SetTeamCheck(backtrackData.teamCheck);
+        Backtrack::SetVisibleColor(backtrackData.visibleColor);
+        Backtrack::SetOccludedColor(backtrackData.occludedColor);
+        Backtrack::SetThickness(backtrackData.thickness);
+
+        Lagcomp::SetMaxTicks(lagcompMaxTicks);
+
         Removals::SetFlashEnabled(misc.removalsFlash);
         Removals::SetSmokeEnabled(misc.removalsSmoke);
 
@@ -646,6 +707,7 @@ namespace ConfigManager {
             Rage::SetSilent(g, rg.silent);
             Rage::SetNoSpread(g, rg.noSpread);
             Rage::SetTeamCheck(g, rg.teamCheck);
+            Rage::SetBacktrack(g, rg.backtrack);
             Rage::SetMinDamage(g, rg.minDamage);
             Rage::SetHitboxes(g, rg.hitboxes);
         }
