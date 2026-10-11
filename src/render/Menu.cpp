@@ -100,7 +100,7 @@ namespace Menu {
         bool silent = Rage::IsSilent();
         bool teamCheck = Rage::IsTeamCheck();
         bool noSpread = Rage::IsNoSpread();
-        bool autoScope = Rage::IsAutoScope();
+        int minDamage = Rage::GetMinDamage();
 
         Widgets::BeginCard("RAGEBOT", 6);
 
@@ -116,24 +116,8 @@ namespace Menu {
         if (Widgets::Toggle("No spread", &noSpread)) {
             Rage::SetNoSpread(noSpread);
         }
-        if (Widgets::Toggle("Auto scope", &autoScope)) {
-            Rage::SetAutoScope(autoScope);
-        }
         if (Widgets::Toggle("Team check", &teamCheck)) {
             Rage::SetTeamCheck(teamCheck);
-        }
-
-        Widgets::EndCard();
-    }
-
-    static void DrawRageAccuracyCard() {
-        float fov = Rage::GetFov();
-        int minDamage = Rage::GetMinDamage();
-
-        Widgets::BeginCard("ACCURACY", 2);
-
-        if (Widgets::SliderFloat("FOV", &fov, 0.5f, 30.0f, "%.1f")) {
-            Rage::SetFov(fov);
         }
         if (Widgets::SliderInt("Min damage", &minDamage, 1, 130)) {
             Rage::SetMinDamage(minDamage);
@@ -164,7 +148,6 @@ namespace Menu {
 
         ImGui::BeginChild("##rage_col_right", ImVec2(colW, 0), false,
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-        DrawRageAccuracyCard();
         DrawRageHitboxCard();
         ImGui::EndChild();
     }
@@ -192,7 +175,7 @@ namespace Menu {
         if (Widgets::Toggle("Team check", &teamCheck)) {
             Aim::SetTeamCheck(teamCheck);
         }
-        if (Widgets::SliderFloat("FOV", &fov, 0.5f, 30.0f, "%.1f")) {
+        if (Widgets::SliderFloat("FOV", &fov, 0.5f, 180.0f, "%.1f")) {
             Aim::SetFov(fov);
         }
         if (Widgets::SliderInt("Smooth", &smooth, 1, 30)) {

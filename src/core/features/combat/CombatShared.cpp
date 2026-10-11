@@ -463,6 +463,7 @@ namespace CombatShared {
             ReadTeamRaw(entity, &team);
 
             Enemy e{};
+            e.visible = false;
             e.pawn = entity;
             e.health = health;
             e.team = team;
@@ -520,14 +521,6 @@ namespace CombatShared {
                         }
                     }
                 }
-            }
-
-            Vec3 eye;
-            if (GetEyePosition(localPawn, eye) && e.headPos.Length() > 1.0f) {
-                e.visible = IsVisible(eye, e.headPos, localPawn, entity);
-            }
-            else {
-                e.visible = false;
             }
 
             out.push_back(e);

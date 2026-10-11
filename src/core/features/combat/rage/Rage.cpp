@@ -1,5 +1,6 @@
 #include "pch.h"
 #include "Rage.h"
+#include "NoSpread.h"
 #include "core/features/combat/CombatShared.h"
 #include "core/systems/Tracing.h"
 #include "core/hooks/CreateMoveHook.h"
@@ -20,21 +21,15 @@ namespace Rage {
     static volatile LONG g_enabled = 0;
     static volatile LONG g_teamCheck = 1;
     static volatile LONG g_hitboxes = 0x1F;
-    static float g_fov = 180.0f;
     static volatile LONG g_minDamage = 1;
     static volatile LONG g_silent = 1;
     static volatile LONG g_autoShoot = 1;
     static volatile LONG g_noSpread = 0;
-    static volatile LONG g_autoScope = 0;
 
     static std::atomic<bool> g_rageAttackWritten{ false };
 
-    static uintptr_t g_getTickViewAngles = 0;
-    static uintptr_t g_calculateSpread = 0;
-    static uintptr_t g_getInaccuracy = 0;
-    static uintptr_t g_updateAccuracy = 0;
-
-    static int s_lastFireTick = 0;
+    static uintptr_t g_getInaccuracyFn = 0;
+    static uintptr_t g_updateAccuracyFn = 0;
 
     static constexpr uint32_t HB_HEAD = 1u << 0;
     static constexpr uint32_t HB_NECK = 1u << 1;
@@ -90,6 +85,7 @@ namespace Rage {
         int numBullets = 1;
         int damage = 0;
         float recoilIndex = 0.0f;
+        int shotsFired = 0;
         float inaccuracy = 0.0f;
         float spread = 0.0f;
         float armorRatio = 0.5f;
@@ -101,20 +97,18 @@ namespace Rage {
     static WeaponState g_cachedWs{};
     static uint32_t g_cachedWsHandle = 0;
 
+    static int g_accCacheTick = -1;
+    static WeaponState g_accCacheWs{};
+
     static uint32_t g_tickBaseOff = 0;
     static uint32_t g_attrMgrOff = 0;
     static uint32_t g_attrItemOff = 0;
     static uint32_t g_itemDefIdxOff = 0;
     static uint32_t g_punchPredOff = 0;
     static uint32_t g_punchUnpredOff = 0;
-    static uint32_t g_nextPrimaryTickOff = 0;
-
-    static uintptr_t ResolveRelCall(uintptr_t instr) {
-        int32_t rel = 0;
-        __try { rel = *reinterpret_cast<int32_t*>(instr + 1); }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
-        return instr + 5 + static_cast<intptr_t>(rel);
-    }
+    static uint32_t g_recoilIndexOff = 0;
+    static uint32_t g_shotsFiredOff = 0;
+    static uint32_t g_spreadOff = 0;
 
     static bool SafeReadPtr(uintptr_t addr, uintptr_t* out) {
         __try { *out = *reinterpret_cast<uintptr_t*>(addr); }
@@ -161,131 +155,43 @@ namespace Rage {
         g_itemDefIdxOff = SCHEMA("C_EconItemView", "m_iItemDefinitionIndex"_hash);
         g_punchPredOff = SCHEMA("CCSPlayer_AimPunchServices", "m_predictableBaseAngle"_hash);
         g_punchUnpredOff = SCHEMA("CCSPlayer_AimPunchServices", "m_unpredictableBaseAngle"_hash);
-        g_nextPrimaryTickOff = SCHEMA("C_BasePlayerWeapon", "m_nNextPrimaryAttackTick"_hash);
+        g_recoilIndexOff = SCHEMA("C_CSWeaponBase", "m_flRecoilIndex"_hash);
+        g_shotsFiredOff = SCHEMA("C_CSPlayerPawn", "m_iShotsFired"_hash);
+        g_spreadOff = SCHEMA("CCSWeaponBaseVData", "m_flSpread"_hash);
 
-        printf("[Rage] schema: tickBase=0x%X attrMgr=0x%X attrItem=0x%X itemDef=0x%X punchPred=0x%X punchUnpred=0x%X nextPrimary=0x%X\n",
+        printf("[Rage] schema: tickBase=0x%X attrMgr=0x%X attrItem=0x%X itemDef=0x%X punchPred=0x%X punchUnpred=0x%X recoilIdx=0x%X shotsFired=0x%X spread=0x%X\n",
             g_tickBaseOff, g_attrMgrOff, g_attrItemOff, g_itemDefIdxOff,
-            g_punchPredOff, g_punchUnpredOff, g_nextPrimaryTickOff);
+            g_punchPredOff, g_punchUnpredOff, g_recoilIndexOff, g_shotsFiredOff, g_spreadOff);
         fflush(stdout);
     }
 
-    static void InitializeSpreadPatterns() {
-        uintptr_t tva = Memory::FindPattern("client.dll",
-            "48 89 5C 24 08 57 48 81 EC F0 00 00 00 F3 0F 10 0A 48 8D 8C 24 10 01 00 00 41 8B D8 48 8B FA E8 ? ? ? ? F3 0F 10 4F 04");
-        if (tva) g_getTickViewAngles = tva;
-
-        uintptr_t cs = Memory::FindPattern("client.dll",
-            "28 F3 44 0F 11 44 24 20 E8 ? ? ? ? 48 8D 85 B0 00 00 00");
-        if (cs) g_calculateSpread = ResolveRelCall(cs + 8);
-
-        uintptr_t gi = Memory::FindPattern("client.dll",
+    static void InitializeAccuracyPatterns() {
+        g_getInaccuracyFn = Memory::FindPattern("client.dll",
             "48 89 5C 24 ? 55 56 57 48 81 EC ? ? ? ? 44 0F 29 84 24");
-        if (gi) g_getInaccuracy = gi;
 
-        uintptr_t ua = Memory::FindPattern("client.dll",
+        g_updateAccuracyFn = Memory::FindPattern("client.dll",
             "40 57 41 56 48 83 EC 68 48 8B F9 E8 ? ? ? ? 4C 8B F0 48 85 C0");
-        if (ua) g_updateAccuracy = ua;
 
-        printf("[Rage] spread: tva=%d calc=%d inac=%d upd=%d\n",
-            g_getTickViewAngles != 0, g_calculateSpread != 0,
-            g_getInaccuracy != 0, g_updateAccuracy != 0);
+        printf("[Rage] accuracy: getInaccuracy=0x%llX updateAccuracy=0x%llX\n",
+            (unsigned long long)g_getInaccuracyFn,
+            (unsigned long long)g_updateAccuracyFn);
         fflush(stdout);
     }
 
     static float CallGetInaccuracy(uintptr_t weapon) {
-        if (!g_getInaccuracy || weapon < 0x10000) return 0.0f;
+        if (!g_getInaccuracyFn || weapon < 0x10000) return 0.0f;
         using Fn = float(*)(uintptr_t, float*, float*);
-        auto fn = reinterpret_cast<Fn>(g_getInaccuracy);
-        __try { return fn(weapon, nullptr, nullptr); }
+        auto f = reinterpret_cast<Fn>(g_getInaccuracyFn);
+        __try { return f(weapon, nullptr, nullptr); }
         __except (EXCEPTION_EXECUTE_HANDLER) { return 0.0f; }
     }
 
     static void CallUpdateAccuracy(uintptr_t weapon) {
-        if (!g_updateAccuracy || weapon < 0x10000) return;
+        if (!g_updateAccuracyFn || weapon < 0x10000) return;
         using Fn = void(*)(uintptr_t);
-        auto fn = reinterpret_cast<Fn>(g_updateAccuracy);
-        __try { fn(weapon); }
+        auto f = reinterpret_cast<Fn>(g_updateAccuracyFn);
+        __try { f(weapon); }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
-    }
-
-    static uint32_t GetSpreadSeed(const math::vector3& angles, int tick) {
-        if (!g_getTickViewAngles) return 0;
-        using Fn = uint32_t(*)(void*, const math::vector3*, int);
-        auto fn = reinterpret_cast<Fn>(g_getTickViewAngles);
-        __try { return fn(nullptr, &angles, tick); }
-        __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
-    }
-
-    static math::vector2 GetCalculatedSpread(int seed, float accuracy, float spread,
-        float recoilIndex, int itemDefIdx, int numBullets)
-    {
-        math::vector2 out{};
-        if (!g_calculateSpread) return out;
-        using Fn = void(*)(int16_t, int, int, uint32_t, float, float, float, float*, float*);
-        auto fn = reinterpret_cast<Fn>(g_calculateSpread);
-        __try {
-            fn((int16_t)itemDefIdx, numBullets, 0, (uint32_t)(seed + 1),
-                accuracy, spread, recoilIndex, &out.x, &out.y);
-        }
-        __except (EXCEPTION_EXECUTE_HANDLER) {}
-        return out;
-    }
-
-    static math::vector3 FindSpreadCorrection(const math::vector3& aimAngle, int tick,
-        const WeaponState& ws)
-    {
-        if (!g_getTickViewAngles || !g_calculateSpread) return aimAngle;
-        if (ws.inaccuracy < 0.001f && ws.spread < 0.001f) return aimAngle;
-
-        constexpr float kRadToDeg = 180.0f / 3.14159265f;
-
-        for (int i = 0; i < 720; i++) {
-            const math::vector3 testAngles{ (float)i / 2.0f, aimAngle.y, 0.0f };
-            const uint32_t seed = GetSpreadSeed(testAngles, tick);
-            if (!seed) continue;
-
-            const math::vector2 spr = GetCalculatedSpread(seed,
-                ws.inaccuracy, ws.spread, ws.recoilIndex, ws.itemDefIdx, ws.numBullets);
-
-            const float mag = std::sqrt(spr.x * spr.x + spr.y * spr.y);
-
-            math::vector3 adjusted = aimAngle;
-            if (mag > 0.0001f) {
-                adjusted.x += std::atan(mag) * kRadToDeg;
-            }
-            adjusted.z = -std::atan2(spr.x, spr.y) * kRadToDeg;
-
-            if (GetSpreadSeed(adjusted, tick) == seed) {
-                return adjusted;
-            }
-        }
-
-        return aimAngle;
-    }
-
-    static math::vector3 GetAimPunch(uintptr_t localPawn) {
-        math::vector3 out{ 0.0f, 0.0f, 0.0f };
-        if (localPawn < 0x10000) return out;
-
-        uintptr_t services = 0;
-        if (!SafeReadPtr(localPawn + OffsetConfig::fields.m_pAimPunchServices, &services)) return out;
-        if (services < 0x10000) return out;
-
-        if (!g_punchPredOff || !g_punchUnpredOff) return out;
-
-        float px = 0.0f, py = 0.0f, pz = 0.0f;
-        float ux = 0.0f, uy = 0.0f, uz = 0.0f;
-        SafeReadF32(services + g_punchPredOff + 0, &px);
-        SafeReadF32(services + g_punchPredOff + 4, &py);
-        SafeReadF32(services + g_punchPredOff + 8, &pz);
-        SafeReadF32(services + g_punchUnpredOff + 0, &ux);
-        SafeReadF32(services + g_punchUnpredOff + 4, &uy);
-        SafeReadF32(services + g_punchUnpredOff + 8, &uz);
-
-        out.x = px + ux;
-        out.y = py + uy;
-        out.z = pz + uz;
-        return out;
     }
 
     static bool IsGameFocused() {
@@ -406,14 +312,15 @@ namespace Rage {
         const uint32_t hsOff = SCHEMA("CCSWeaponBaseVData", "m_flHeadshotMultiplier"_hash);
         const uint32_t wtOff = SCHEMA("CCSWeaponBaseVData", "m_WeaponType"_hash);
         const uint32_t bulletsOff = SCHEMA("CCSWeaponBaseVData", "m_nNumBullets"_hash);
-        const uint32_t recoilOff = SCHEMA("C_CSWeaponBase", "m_flRecoilIndex"_hash);
 
         if (dmgOff) SafeReadI32(vdata + dmgOff, &ws.damage);
         if (armorOff) SafeReadF32(vdata + armorOff, &ws.armorRatio);
         if (hsOff) SafeReadF32(vdata + hsOff, &ws.headshotMultiplier);
         if (wtOff) SafeReadU32(vdata + wtOff, &ws.weaponType);
         if (bulletsOff) SafeReadI32(vdata + bulletsOff, &ws.numBullets);
-        if (recoilOff) SafeReadF32(weapon + recoilOff, &ws.recoilIndex);
+        if (g_recoilIndexOff) SafeReadF32(weapon + g_recoilIndexOff, &ws.recoilIndex);
+        if (g_shotsFiredOff) SafeReadI32(localPawn + g_shotsFiredOff, &ws.shotsFired);
+        if (g_spreadOff) SafeReadF32(vdata + g_spreadOff, &ws.spread);
 
         if (ws.damage <= 0) ws.damage = 30;
         if (ws.armorRatio <= 0.0f) ws.armorRatio = 0.5f;
@@ -447,10 +354,18 @@ namespace Rage {
         return ws;
     }
 
-    static WeaponState GetWeaponStateWithAccuracy(uintptr_t localPawn) {
+    static WeaponState GetWeaponStateWithAccuracy(uintptr_t localPawn, int tickBase) {
+        if (tickBase > 0 && tickBase == g_accCacheTick && g_accCacheWs.valid) {
+            return g_accCacheWs;
+        }
+
         const uint32_t handle = GetWeaponHandle(localPawn);
         if (!handle) return {};
-        return BuildWeaponState(localPawn, handle, true);
+
+        WeaponState ws = BuildWeaponState(localPawn, handle, true);
+        g_accCacheWs = ws;
+        g_accCacheTick = tickBase;
+        return ws;
     }
 
     static int EstimateDamage(const WeaponState& ws, int hitgroup) {
@@ -487,7 +402,7 @@ namespace Rage {
         const auto enemies = CombatShared::GetEnemiesCached();
         const int localTeam = ReadTeam(localPawn);
         const uint32_t mask = (uint32_t)g_hitboxes;
-        const float maxFov = g_fov;
+        const float maxFov = 180.0f;
         const int teamCheck = g_teamCheck;
         const int minDamage = g_minDamage;
 
@@ -544,38 +459,54 @@ namespace Rage {
         return out;
     }
 
-    static void ReleaseAttackIfHeld(UsercmdLayout* cmd) {
-        if (g_rageAttackWritten.load()) {
-            cmd->buttons.value &= ~1ull;
-            cmd->buttons.value_changed |= 1ull;
-            g_rageAttackWritten.store(false);
-        }
+    static float EffectiveRecoil(const WeaponState& ws) {
+        if (ws.recoilIndex > 0.01f) return ws.recoilIndex;
+        if (ws.shotsFired > 0) return (float)ws.shotsFired;
+        return 0.0f;
     }
 
     static void OnCreateMoveInternal(void* cmdPtr) {
         UsercmdLayout* cmd = reinterpret_cast<UsercmdLayout*>(cmdPtr);
         if (!cmd) return;
 
+        const bool wasAttacking = g_rageAttackWritten.load();
+
         if (g_enabled == 0 || Renderer::IsMenuOpen() || !IsGameFocused()) {
-            ReleaseAttackIfHeld(cmd);
+            if (wasAttacking) {
+                cmd->buttons.value &= ~1ull;
+                cmd->buttons.value_changed |= 1ull;
+                g_rageAttackWritten.store(false);
+            }
             return;
         }
 
         uintptr_t localPawn = CombatShared::GetLocalPawn();
         if (!localPawn) {
-            ReleaseAttackIfHeld(cmd);
+            if (wasAttacking) {
+                cmd->buttons.value &= ~1ull;
+                cmd->buttons.value_changed |= 1ull;
+                g_rageAttackWritten.store(false);
+            }
             return;
         }
 
         Vec3 eye;
         if (!CombatShared::GetEyePosition(localPawn, eye)) {
-            ReleaseAttackIfHeld(cmd);
+            if (wasAttacking) {
+                cmd->buttons.value &= ~1ull;
+                cmd->buttons.value_changed |= 1ull;
+                g_rageAttackWritten.store(false);
+            }
             return;
         }
 
         Vec3 curAngles;
         if (!ReadViewAngles(curAngles)) {
-            ReleaseAttackIfHeld(cmd);
+            if (wasAttacking) {
+                cmd->buttons.value &= ~1ull;
+                cmd->buttons.value_changed |= 1ull;
+                g_rageAttackWritten.store(false);
+            }
             return;
         }
 
@@ -583,42 +514,28 @@ namespace Rage {
 
         ScanResult res = DoScan(localPawn, ws, eye, curAngles);
 
-        if (!res.valid) {
-            ReleaseAttackIfHeld(cmd);
-            return;
-        }
-
-        static uintptr_t s_lastTarget = 0;
-        static bool s_lastAttackState = false;
-
-        if (res.pawn != s_lastTarget) {
-            s_lastTarget = res.pawn;
-        }
-
-        const uintptr_t lc = CombatShared::GetLocalController();
-        const int tickBase = ReadTickBase(lc);
-
-        int nextPrimaryTick = 0;
-        if (g_nextPrimaryTickOff && ws.valid && ws.weapon) {
-            SafeReadI32(ws.weapon + g_nextPrimaryTickOff, &nextPrimaryTick);
-        }
-        const bool weaponReady = (tickBase > 0) && (tickBase >= nextPrimaryTick);
-        const bool tickAdvanced = (tickBase > 0) && (tickBase > s_lastFireTick);
-
         const bool autoShoot = (g_autoShoot != 0);
-        const bool fireThisTick = autoShoot && weaponReady && tickAdvanced;
+        const bool wantFire = autoShoot && res.valid;
 
         const math::vector3 userAngleVec{ curAngles.x, curAngles.y, 0.0f };
         const bool silent = (g_silent != 0);
-        math::vector3 writeAngle = res.angle;
+        math::vector3 writeAngle = res.valid ? res.angle : userAngleVec;
 
-        if (fireThisTick && g_noSpread != 0) {
-            WeaponState wsAcc = GetWeaponStateWithAccuracy(localPawn);
+        if (wantFire && g_noSpread != 0) {
+            const uintptr_t lc = CombatShared::GetLocalController();
+            const int tickBase = ReadTickBase(lc);
+
+            WeaponState wsAcc = GetWeaponStateWithAccuracy(localPawn, tickBase);
 
             if (wsAcc.valid && tickBase > 0) {
-                if (wsAcc.inaccuracy > 0.001f || wsAcc.spread > 0.001f) {
-                    const math::vector3 corrected = FindSpreadCorrection(
-                        writeAngle, tickBase + 1, wsAcc);
+                const float recoil = EffectiveRecoil(wsAcc);
+
+                if (recoil > 0.5f || wsAcc.inaccuracy > 0.001f || wsAcc.spread > 0.001f) {
+                    const math::vector3 corrected = NoSpread::Correct(
+                        writeAngle, tickBase + 1,
+                        wsAcc.itemDefIdx, wsAcc.numBullets,
+                        wsAcc.inaccuracy, wsAcc.spread, recoil);
+
                     if (corrected.x != 0.0f || corrected.y != 0.0f || corrected.z != 0.0f) {
                         writeAngle = corrected;
                     }
@@ -626,23 +543,8 @@ namespace Rage {
             }
         }
 
-        const math::vector3 aimPunch = GetAimPunch(localPawn);
-
-        const math::vector3 serverAngle{
-            writeAngle.x - aimPunch.x,
-            writeAngle.y - aimPunch.y,
-            0.0f
-        };
-
-        if (fireThisTick) {
-            printf("[rage] fire tick=%d nextPrimary=%d recoil=%.3f inacc=%.4f punch=(%.3f,%.3f) aim=(%.2f,%.2f)\n",
-                tickBase, nextPrimaryTick, ws.recoilIndex, ws.inaccuracy,
-                aimPunch.x, aimPunch.y, writeAngle.x, writeAngle.y);
-            fflush(stdout);
-        }
-
         auto* base = GetProtobufBase(cmd);
-        if (base) {
+        if (base && res.valid) {
             if (auto* va = base->mutable_viewangles()) {
                 if (silent) {
                     va->set_x(userAngleVec.x);
@@ -650,65 +552,67 @@ namespace Rage {
                     va->set_z(0.0f);
                 }
                 else {
-                    va->set_x(serverAngle.x);
-                    va->set_y(serverAngle.y);
+                    va->set_x(writeAngle.x);
+                    va->set_y(writeAngle.y);
                     va->set_z(writeAngle.z);
                 }
             }
         }
 
-        const int historySize = cmd->pb.input_history.current_size;
-        for (int i = 0; i < historySize; ++i) {
-            auto* entry = GetInputHistoryEntry(cmd, i);
-            if (!entry) continue;
+        if (res.valid) {
+            const int historySize = cmd->pb.input_history.current_size;
+            for (int i = 0; i < historySize; ++i) {
+                auto* entry = GetInputHistoryEntry(cmd, i);
+                if (!entry) continue;
 
-            uintptr_t rawVa = reinterpret_cast<uintptr_t>(entry->m_view_angles);
-            if (rawVa < 0x10000) continue;
+                uintptr_t rawVa = reinterpret_cast<uintptr_t>(entry->m_view_angles);
+                if (rawVa < 0x10000) continue;
 
-            auto* va = reinterpret_cast<proto::msg_qangle*>(rawVa + 0x10);
-            va->set_x(serverAngle.x);
-            va->set_y(serverAngle.y);
-            va->set_z(writeAngle.z);
+                auto* va = reinterpret_cast<proto::msg_qangle*>(rawVa + 0x10);
+                va->set_x(writeAngle.x);
+                va->set_y(writeAngle.y);
+                va->set_z(writeAngle.z);
+            }
+
+            if (!silent) {
+                WriteClientViewAngles(writeAngle);
+            }
         }
 
-        if (!silent) {
-            WriteClientViewAngles(serverAngle);
-        }
-
-        if (fireThisTick) {
-            s_lastFireTick = tickBase;
-            g_rageAttackWritten.store(true);
-        }
-        else {
-            g_rageAttackWritten.store(false);
-        }
-
-        const bool attackChanged = (fireThisTick != s_lastAttackState);
-        s_lastAttackState = fireThisTick;
-
-        if (fireThisTick) {
+        if (wantFire) {
             cmd->buttons.value |= 1ull;
             cmd->buttons.value_changed |= 1ull;
             cmd->buttons.value_scroll |= 1ull;
-        }
-        else {
-            cmd->buttons.value &= ~1ull;
-            if (attackChanged) {
-                cmd->buttons.value_changed |= 1ull;
-                cmd->buttons.value_scroll |= 1ull;
+
+            const int historySize = cmd->pb.input_history.current_size;
+            if (historySize > 0) {
+                cmd->pb.has_bits.bits |= (1u << 6);
+                cmd->pb.attack1_start_history_index = historySize - 1;
             }
+
+            g_rageAttackWritten.store(true);
+        }
+        else if (wasAttacking) {
+            cmd->buttons.value &= ~1ull;
+            cmd->buttons.value_changed |= 1ull;
+            cmd->buttons.value_scroll |= 1ull;
+            g_rageAttackWritten.store(false);
         }
     }
 
     void Initialize() {
         InitializeSchemaOffsets();
-        InitializeSpreadPatterns();
+        InitializeAccuracyPatterns();
+        NoSpread::Initialize();
         CreateMoveHook::Register(&OnCreateMoveInternal);
     }
 
     void Shutdown() {
         g_rageAttackWritten.store(false);
-        s_lastFireTick = 0;
+        NoSpread::Shutdown();
+        g_getInaccuracyFn = 0;
+        g_updateAccuracyFn = 0;
+        g_accCacheTick = -1;
     }
 
     void Tick() {}
@@ -728,12 +632,8 @@ namespace Rage {
         InterlockedExchange(&g_hitboxes, (LONG)mask);
     }
 
-    float GetFov() { return g_fov; }
-    void SetFov(float fov) {
-        if (fov < 0.1f) fov = 0.1f;
-        if (fov > 180.0f) fov = 180.0f;
-        g_fov = fov;
-    }
+    float GetFov() { return 180.0f; }
+    void SetFov(float) {}
 
     int GetMinDamage() { return g_minDamage; }
     void SetMinDamage(int damage) {

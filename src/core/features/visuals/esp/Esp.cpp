@@ -528,24 +528,35 @@ namespace Esp {
         ImDrawList* dl = ImGui::GetBackgroundDrawList();
         if (!dl) return;
 
+        Vec3 localEye;
+        const bool haveEye = CombatShared::GetEyePosition(localPawn, localEye);
+
         for (const auto& e : enemies) {
             if (g_teamCheck != 0 && e.team == localTeam) continue;
-
-            if (g_skeletonDebug != 0) {
-                DrawBoneDebug(dl, e);
-            }
-
-            DrawSkeleton(dl, e);
 
             Bounds b;
             if (!ComputeBounds(e.pawn, e.origin, b)) continue;
 
+            bool visible = false;
+            if (haveEye && e.headPos.Length() > 1.0f) {
+                visible = CombatShared::IsVisible(localEye, e.headPos, localPawn, e.pawn);
+            }
+
+            CombatShared::Enemy shaded = e;
+            shaded.visible = visible;
+
+            if (g_skeletonDebug != 0) {
+                DrawBoneDebug(dl, shaded);
+            }
+
+            DrawSkeleton(dl, shaded);
+
             SideOffsets off{ 0.0f, 0.0f, 0.0f, 0.0f };
 
-            if (g_boxEnabled != 0) DrawBox(dl, b, e);
-            DrawHealthBar(dl, b, e, off);
-            DrawAmmoBar(dl, b, e, off);
-            DrawName(dl, b, e, off);
+            if (g_boxEnabled != 0) DrawBox(dl, b, shaded);
+            DrawHealthBar(dl, b, shaded, off);
+            DrawAmmoBar(dl, b, shaded, off);
+            DrawName(dl, b, shaded, off);
         }
 
         DrawFovCircle(dl);
