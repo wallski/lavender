@@ -2,35 +2,39 @@
 #include <cstdint>
 
 namespace Rage {
+
+    enum class Group : int {
+        Pistol = 0,
+        SMG = 1,
+        Rifle = 2,
+        Shotgun = 3,
+        Sniper = 4,
+        LMG = 5,
+        Count = 6
+    };
+
     void Initialize();
     void Shutdown();
-
     void Tick();
 
-    bool IsEnabled();
-    void SetEnabled(bool enabled);
+    bool IsEnabled(Group g);
+    void SetEnabled(Group g, bool enabled);
 
-    bool IsTeamCheck();
-    void SetTeamCheck(bool enabled);
+    bool IsAutoShoot(Group g);
+    void SetAutoShoot(Group g, bool enabled);
 
-    uint32_t GetHitboxes();
-    void SetHitboxes(uint32_t mask);
+    bool IsSilent(Group g);
+    void SetSilent(Group g, bool enabled);
 
-    float GetFov();
-    void SetFov(float fov);
+    bool IsNoSpread(Group g);
+    void SetNoSpread(Group g, bool enabled);
 
-    int GetMinDamage();
-    void SetMinDamage(int damage);
+    bool IsTeamCheck(Group g);
+    void SetTeamCheck(Group g, bool enabled);
 
-    bool IsSilent();
-    void SetSilent(bool enabled);
+    int GetMinDamage(Group g);
+    void SetMinDamage(Group g, int damage);
 
-    bool IsAutoShoot();
-    void SetAutoShoot(bool enabled);
-
-    bool IsNoSpread();
-    void SetNoSpread(bool enabled);
-
-    bool IsAutoScope();
-    void SetAutoScope(bool enabled);
+    uint32_t GetHitboxes(Group g);
+    void SetHitboxes(Group g, uint32_t mask);
 }

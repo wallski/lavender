@@ -75,6 +75,9 @@ namespace Skybox {
         uintptr_t pawn = 0;
         if (!SafeReadPtr(global, &pawn)) return 0;
         if (pawn < 0x10000) return 0;
+        uintptr_t sn = 0;
+        if (!SafeReadPtr(pawn + OffsetConfig::fields.m_pGameSceneNode, &sn)) return 0;
+        if (sn < 0x10000) return 0;
         return pawn;
     }
 
@@ -83,14 +86,13 @@ namespace Skybox {
         if (!SafeReadPtr(OffsetConfig::globals.dwGlobalVars, &globalVars)) return 0.0f;
         if (globalVars < 0x10000) return 0.0f;
         float curtime = 0.0f;
-        SafeReadF32(globalVars + 0x00, &curtime);
+        SafeReadF32(globalVars + 0x30, &curtime);
         return curtime;
     }
 
     static bool InLiveMatch() {
         uintptr_t pawn = SafeReadLocalPawn();
         if (!pawn) return false;
-        if (SafeReadCurtime() < 5.0f) return false;
         return true;
     }
 

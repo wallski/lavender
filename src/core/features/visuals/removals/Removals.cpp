@@ -117,12 +117,26 @@ namespace Removals {
         ApplySmokePatch(inLevel);
     }
 
+    static bool LiveMatch() {
+        const uintptr_t global = OffsetConfig::globals.dwLocalPlayerPawn;
+        if (!IsValidPtr(global)) return false;
+
+        uintptr_t localPawn = 0;
+        if (!SafeReadPtr(global, &localPawn)) return false;
+        if (!IsValidPtr(localPawn)) return false;
+
+        uintptr_t sn = 0;
+        if (!SafeReadPtr(localPawn + OffsetConfig::fields.m_pGameSceneNode, &sn)) return false;
+        if (!IsValidPtr(sn)) return false;
+
+        return true;
+    }
+
     static void UpdateFlash() {
         if (g_flashEnabled == 0) return;
+        if (!LiveMatch()) return;
 
         const uintptr_t global = OffsetConfig::globals.dwLocalPlayerPawn;
-        if (!IsValidPtr(global)) return;
-
         uintptr_t localPawn = 0;
         if (!SafeReadPtr(global, &localPawn)) return;
         if (!IsValidPtr(localPawn)) return;

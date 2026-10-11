@@ -85,6 +85,15 @@ namespace Chams {
         return (Materials::Id)base;
     }
 
+    static bool LiveMatch() {
+        if (!g_localPawnGlobal) return false;
+        uintptr_t pawn = __TryReadPtr(g_localPawnGlobal);
+        if (pawn < 0x10000) return false;
+        uintptr_t sn = __TryReadPtr(pawn + OffsetConfig::fields.m_pGameSceneNode);
+        if (sn < 0x10000) return false;
+        return true;
+    }
+
     void SetEntityListGlobal(uintptr_t addr) { g_entityListGlobal = addr; }
     void SetLocalPawnGlobal(uintptr_t addr) { g_localPawnGlobal = addr; }
 
@@ -114,10 +123,12 @@ namespace Chams {
 
         uintptr_t arr = (uintptr_t)array;
         if (arr < 0x10000) return;
-        if (count > 65536) count = 65536;
+        if (count == 0 || count > 65536) return;
+
+        if (!LiveMatch()) return;
 
         uintptr_t localPawn = __TryReadPtr(g_localPawnGlobal);
-        if (!localPawn || localPawn < 0x10000) return;
+        if (localPawn < 0x10000) return;
 
         const Materials::Id resolved = ResolveMaterial();
         const uintptr_t material = Materials::Get(resolved);

@@ -4,6 +4,7 @@
 #include "Widgets.h"
 #include "imgui.h"
 #include "imgui_internal.h"
+#include <functional>
 #include "../core/features/visuals/chams/Chams.h"
 #include "../core/features/visuals/chams/Materials.h"
 #include "../core/features/visuals/esp/Esp.h"
@@ -20,12 +21,14 @@ namespace Menu {
     static int g_activeTab = 0;
     static int g_legitSubTab = 0;
     static int g_visualsSubTab = 0;
+    static int g_rageSubTab = 0;
     static int g_menuKey = VK_DELETE;
     static char g_configNameBuf[64] = "default";
     static std::string g_pendingDelete;
 
     static const char* kLegitSubTabs[] = { "Aim", "Trigger" };
     static const char* kVisualsSubTabs[] = { "Chams", "ESP", "Info" };
+    static const char* kRageSubTabs[] = { "Pistol", "SMG", "Rifle", "Shotgun", "Sniper", "LMG" };
 
     static const char* kMaterialNames[] = {
         "None", "Matte", "Flat", "Glow", "Outlines", "Bloom"
@@ -42,9 +45,9 @@ namespace Menu {
     int GetMenuKey() { return g_menuKey; }
     void SetMenuKey(int key) { g_menuKey = key; }
 
-    static void DrawHitboxDropdown(uint32_t* hitboxes, void (*setter)(uint32_t)) {
+    static void DrawHitboxDropdown(const char* id, uint32_t* hitboxes, const std::function<void(uint32_t)>& setter) {
         constexpr float rowH = 30.0f;
-        ImGui::PushID("##hitbox_dropdown");
+        ImGui::PushID(id);
 
         ImVec2 pos = ImGui::GetCursorScreenPos();
         float avail = ImGui::GetContentRegionAvail().x;
@@ -94,62 +97,84 @@ namespace Menu {
         ImGui::PopID();
     }
 
-    static void DrawRageMainCard() {
-        bool enabled = Rage::IsEnabled();
-        bool autoShoot = Rage::IsAutoShoot();
-        bool silent = Rage::IsSilent();
-        bool teamCheck = Rage::IsTeamCheck();
-        bool noSpread = Rage::IsNoSpread();
-        int minDamage = Rage::GetMinDamage();
+    static void DrawSubTabBar(const char* const* names, int count, int* current) {
+        ImGui::Dummy(ImVec2(0, 2));
+        for (int i = 0; i < count; i++) {
+            Widgets::TopTab(names[i], current, i);
+        }
+        ImGui::NewLine();
 
-        Widgets::BeginCard("RAGEBOT", 6);
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        const float w = ImGui::GetContentRegionAvail().x;
+        ImGui::GetWindowDrawList()->AddLine(
+            ImVec2(p.x, p.y - 6.0f),
+            ImVec2(p.x + w, p.y - 6.0f),
+            ImGui::GetColorU32(Style::Border), 1.0f);
+
+        ImGui::Dummy(ImVec2(0, 8));
+    }
+
+    static void DrawRageWeaponCard(Rage::Group g) {
+        bool enabled = Rage::IsEnabled(g);
+        bool autoShoot = Rage::IsAutoShoot(g);
+        bool silent = Rage::IsSilent(g);
+        bool noSpread = Rage::IsNoSpread(g);
+        bool teamCheck = Rage::IsTeamCheck(g);
+        int minDamage = Rage::GetMinDamage(g);
+
+        Widgets::BeginCard("WEAPON", 6);
 
         if (Widgets::Toggle("Enabled", &enabled)) {
-            Rage::SetEnabled(enabled);
+            Rage::SetEnabled(g, enabled);
         }
         if (Widgets::Toggle("Auto shoot", &autoShoot)) {
-            Rage::SetAutoShoot(autoShoot);
+            Rage::SetAutoShoot(g, autoShoot);
         }
         if (Widgets::Toggle("Silent", &silent)) {
-            Rage::SetSilent(silent);
+            Rage::SetSilent(g, silent);
         }
         if (Widgets::Toggle("No spread", &noSpread)) {
-            Rage::SetNoSpread(noSpread);
+            Rage::SetNoSpread(g, noSpread);
         }
         if (Widgets::Toggle("Team check", &teamCheck)) {
-            Rage::SetTeamCheck(teamCheck);
+            Rage::SetTeamCheck(g, teamCheck);
         }
         if (Widgets::SliderInt("Min damage", &minDamage, 1, 130)) {
-            Rage::SetMinDamage(minDamage);
+            Rage::SetMinDamage(g, minDamage);
         }
 
         Widgets::EndCard();
     }
 
-    static void DrawRageHitboxCard() {
-        uint32_t hitboxes = Rage::GetHitboxes();
+    static void DrawRageHitboxCard(Rage::Group g) {
+        uint32_t hitboxes = Rage::GetHitboxes(g);
 
         Widgets::BeginCard("HITBOXES", 1);
-        DrawHitboxDropdown(&hitboxes, Rage::SetHitboxes);
+        DrawHitboxDropdown("##rage_hb", &hitboxes, [g](uint32_t mask) { Rage::SetHitboxes(g, mask); });
         Widgets::EndCard();
     }
 
-    static void DrawRageTab() {
+    static void DrawRageSubTab(Rage::Group g) {
         const float totalW = ImGui::GetContentRegionAvail().x;
         const float gap = 10.0f;
         const float colW = (totalW - gap) * 0.5f;
 
         ImGui::BeginChild("##rage_col_left", ImVec2(colW, 0), false,
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-        DrawRageMainCard();
+        DrawRageWeaponCard(g);
         ImGui::EndChild();
 
         ImGui::SameLine(0, gap);
 
         ImGui::BeginChild("##rage_col_right", ImVec2(colW, 0), false,
             ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
-        DrawRageHitboxCard();
+        DrawRageHitboxCard(g);
         ImGui::EndChild();
+    }
+
+    static void DrawRageTab() {
+        DrawSubTabBar(kRageSubTabs, IM_ARRAYSIZE(kRageSubTabs), &g_rageSubTab);
+        DrawRageSubTab((Rage::Group)g_rageSubTab);
     }
 
     static void DrawAimCard() {
@@ -197,7 +222,7 @@ namespace Menu {
         uint32_t hitboxes = Aim::GetHitboxes();
 
         Widgets::BeginCard("HITBOXES", 1);
-        DrawHitboxDropdown(&hitboxes, Aim::SetHitboxes);
+        DrawHitboxDropdown("##aim_hb", &hitboxes, [](uint32_t mask) { Aim::SetHitboxes(mask); });
         Widgets::EndCard();
     }
 
@@ -225,7 +250,7 @@ namespace Menu {
         uint32_t hitboxes = Triggerbot::GetHitboxes();
 
         Widgets::BeginCard("HITBOXES", 1);
-        DrawHitboxDropdown(&hitboxes, Triggerbot::SetHitboxes);
+        DrawHitboxDropdown("##trigger_hb", &hitboxes, [](uint32_t mask) { Triggerbot::SetHitboxes(mask); });
         Widgets::EndCard();
     }
 
@@ -279,23 +304,6 @@ namespace Menu {
         DrawTriggerHitboxCard();
         DrawTriggerTimingCard();
         ImGui::EndChild();
-    }
-
-    static void DrawSubTabBar(const char* const* names, int count, int* current) {
-        ImGui::Dummy(ImVec2(0, 2));
-        for (int i = 0; i < count; i++) {
-            Widgets::TopTab(names[i], current, i);
-        }
-        ImGui::NewLine();
-
-        const ImVec2 p = ImGui::GetCursorScreenPos();
-        const float w = ImGui::GetContentRegionAvail().x;
-        ImGui::GetWindowDrawList()->AddLine(
-            ImVec2(p.x, p.y - 6.0f),
-            ImVec2(p.x + w, p.y - 6.0f),
-            ImGui::GetColorU32(Style::Border), 1.0f);
-
-        ImGui::Dummy(ImVec2(0, 8));
     }
 
     static void DrawLegitTab() {

@@ -21,6 +21,8 @@
 
 namespace ConfigManager {
 
+    static const char* kRageGroupKeys[] = { "pistol", "smg", "rifle", "shotgun", "sniper", "lmg" };
+
     static std::string g_directory;
     static std::string g_currentName = "default";
 
@@ -236,13 +238,18 @@ namespace ConfigManager {
         f << "aim.on_accuracy=" << (Aim::IsOnAccuracy() ? 1 : 0) << "\n";
         f << "aim.accuracy_speed=" << Aim::GetAccuracySpeed() << "\n";
 
-        f << "rage.enabled=" << (Rage::IsEnabled() ? 1 : 0) << "\n";
-        f << "rage.auto_shoot=" << (Rage::IsAutoShoot() ? 1 : 0) << "\n";
-        f << "rage.team_check=" << (Rage::IsTeamCheck() ? 1 : 0) << "\n";
-        f << "rage.hitboxes=" << (unsigned int)Rage::GetHitboxes() << "\n";
-        f << "rage.min_damage=" << Rage::GetMinDamage() << "\n";
-        f << "rage.silent=" << (Rage::IsSilent() ? 1 : 0) << "\n";
-        f << "rage.no_spread=" << (Rage::IsNoSpread() ? 1 : 0) << "\n";
+        for (int i = 0; i < (int)Rage::Group::Count; i++) {
+            const Rage::Group g = (Rage::Group)i;
+            const std::string prefix = std::string("rage.") + kRageGroupKeys[i] + ".";
+
+            f << prefix << "enabled=" << (Rage::IsEnabled(g) ? 1 : 0) << "\n";
+            f << prefix << "auto_shoot=" << (Rage::IsAutoShoot(g) ? 1 : 0) << "\n";
+            f << prefix << "silent=" << (Rage::IsSilent(g) ? 1 : 0) << "\n";
+            f << prefix << "no_spread=" << (Rage::IsNoSpread(g) ? 1 : 0) << "\n";
+            f << prefix << "team_check=" << (Rage::IsTeamCheck(g) ? 1 : 0) << "\n";
+            f << prefix << "min_damage=" << Rage::GetMinDamage(g) << "\n";
+            f << prefix << "hitboxes=" << (unsigned int)Rage::GetHitboxes(g) << "\n";
+        }
 
         f << "menu.key=" << Renderer::GetMenuKey() << "\n";
         f << "menu.accent_r=" << Style::Accent.x << "\n";
@@ -331,13 +338,16 @@ namespace ConfigManager {
         bool aimOnAccuracy = false;
         float aimAccuracySpeed = 5.0f;
 
-        bool rageEnabled = false;
-        bool rageAutoShoot = true;
-        bool rageTeamCheck = true;
-        uint32_t rageHitboxes = 0x1F;
-        int rageMinDamage = 1;
-        bool rageSilent = true;
-        bool rageNoSpread = false;
+        struct RageGroupData {
+            bool enabled = false;
+            bool autoShoot = true;
+            bool silent = true;
+            bool noSpread = false;
+            bool teamCheck = true;
+            int minDamage = 1;
+            uint32_t hitboxes = 0x1F;
+        };
+        RageGroupData rageGroups[(int)Rage::Group::Count];
 
         int menuKey = VK_DELETE;
         float accent[3] = { Style::Accent.x, Style::Accent.y, Style::Accent.z };
@@ -475,18 +485,29 @@ namespace ConfigManager {
             else if (key == "aim.on_accuracy") aimOnAccuracy = ParseBool(val);
             else if (key == "aim.accuracy_speed") aimAccuracySpeed = ParseFloat(val, aimAccuracySpeed);
 
-            else if (key == "rage.enabled") rageEnabled = ParseBool(val);
-            else if (key == "rage.auto_shoot") rageAutoShoot = ParseBool(val);
-            else if (key == "rage.team_check") rageTeamCheck = ParseBool(val);
-            else if (key == "rage.hitboxes") rageHitboxes = (uint32_t)ParseInt(val, (int)rageHitboxes);
-            else if (key == "rage.min_damage") rageMinDamage = ParseInt(val, rageMinDamage);
-            else if (key == "rage.silent") rageSilent = ParseBool(val);
-            else if (key == "rage.no_spread") rageNoSpread = ParseBool(val);
-
             else if (key == "menu.key") menuKey = ParseInt(val, menuKey);
             else if (key == "menu.accent_r") accent[0] = ParseFloat(val, accent[0]);
             else if (key == "menu.accent_g") accent[1] = ParseFloat(val, accent[1]);
             else if (key == "menu.accent_b") accent[2] = ParseFloat(val, accent[2]);
+
+            else {
+                for (int i = 0; i < (int)Rage::Group::Count; i++) {
+                    const std::string prefix = std::string("rage.") + kRageGroupKeys[i] + ".";
+                    if (key.rfind(prefix, 0) != 0) continue;
+
+                    const std::string suffix = key.substr(prefix.size());
+                    auto& rg = rageGroups[i];
+
+                    if (suffix == "enabled") rg.enabled = ParseBool(val);
+                    else if (suffix == "auto_shoot") rg.autoShoot = ParseBool(val);
+                    else if (suffix == "silent") rg.silent = ParseBool(val);
+                    else if (suffix == "no_spread") rg.noSpread = ParseBool(val);
+                    else if (suffix == "team_check") rg.teamCheck = ParseBool(val);
+                    else if (suffix == "min_damage") rg.minDamage = ParseInt(val, rg.minDamage);
+                    else if (suffix == "hitboxes") rg.hitboxes = (uint32_t)ParseInt(val, (int)rg.hitboxes);
+                    break;
+                }
+            }
         }
 
         Chams::SetEnabled(chamsEnabled);
@@ -563,13 +584,18 @@ namespace ConfigManager {
         Aim::SetOnAccuracy(aimOnAccuracy);
         Aim::SetAccuracySpeed(aimAccuracySpeed);
 
-        Rage::SetEnabled(rageEnabled);
-        Rage::SetAutoShoot(rageAutoShoot);
-        Rage::SetTeamCheck(rageTeamCheck);
-        Rage::SetHitboxes(rageHitboxes);
-        Rage::SetMinDamage(rageMinDamage);
-        Rage::SetSilent(rageSilent);
-        Rage::SetNoSpread(rageNoSpread);
+        for (int i = 0; i < (int)Rage::Group::Count; i++) {
+            const Rage::Group g = (Rage::Group)i;
+            const auto& rg = rageGroups[i];
+
+            Rage::SetEnabled(g, rg.enabled);
+            Rage::SetAutoShoot(g, rg.autoShoot);
+            Rage::SetSilent(g, rg.silent);
+            Rage::SetNoSpread(g, rg.noSpread);
+            Rage::SetTeamCheck(g, rg.teamCheck);
+            Rage::SetMinDamage(g, rg.minDamage);
+            Rage::SetHitboxes(g, rg.hitboxes);
+        }
 
         Renderer::SetMenuKey(menuKey);
         Style::SetAccent(accent[0], accent[1], accent[2]);

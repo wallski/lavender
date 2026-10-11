@@ -18,16 +18,19 @@
 
 namespace Rage {
 
-    static volatile LONG g_enabled = 0;
-    static volatile LONG g_teamCheck = 1;
-    static volatile LONG g_hitboxes = 0x1F;
-    static volatile LONG g_minDamage = 1;
-    static volatile LONG g_silent = 1;
-    static volatile LONG g_autoShoot = 1;
-    static volatile LONG g_noSpread = 0;
+    struct WeaponSettings {
+        volatile LONG enabled = 0;
+        volatile LONG autoShoot = 1;
+        volatile LONG silent = 1;
+        volatile LONG noSpread = 0;
+        volatile LONG teamCheck = 1;
+        volatile LONG minDamage = 1;
+        volatile LONG hitboxes = 0x1F;
+    };
+
+    static WeaponSettings g_weapons[(int)Group::Count];
 
     static std::atomic<bool> g_rageAttackWritten{ false };
-
     static uintptr_t g_getInaccuracyFn = 0;
     static uintptr_t g_updateAccuracyFn = 0;
 
@@ -104,11 +107,10 @@ namespace Rage {
     static uint32_t g_attrMgrOff = 0;
     static uint32_t g_attrItemOff = 0;
     static uint32_t g_itemDefIdxOff = 0;
-    static uint32_t g_punchPredOff = 0;
-    static uint32_t g_punchUnpredOff = 0;
     static uint32_t g_recoilIndexOff = 0;
     static uint32_t g_shotsFiredOff = 0;
     static uint32_t g_spreadOff = 0;
+    static uint32_t g_nextPrimaryTickOff = 0;
 
     static bool SafeReadPtr(uintptr_t addr, uintptr_t* out) {
         __try { *out = *reinterpret_cast<uintptr_t*>(addr); }
@@ -148,20 +150,31 @@ namespace Rage {
         return tb;
     }
 
+    static Group GroupFromWeaponType(uint32_t wt) {
+        switch (wt) {
+        case 1: return Group::Pistol;
+        case 2: return Group::SMG;
+        case 3: return Group::Rifle;
+        case 4: return Group::Shotgun;
+        case 5: return Group::Sniper;
+        case 6: return Group::LMG;
+        default: return Group::Rifle;
+        }
+    }
+
     static void InitializeSchemaOffsets() {
         g_tickBaseOff = SCHEMA("CBasePlayerController", "m_nTickBase"_hash);
         g_attrMgrOff = SCHEMA("C_EconEntity", "m_AttributeManager"_hash);
         g_attrItemOff = SCHEMA("C_AttributeContainer", "m_Item"_hash);
         g_itemDefIdxOff = SCHEMA("C_EconItemView", "m_iItemDefinitionIndex"_hash);
-        g_punchPredOff = SCHEMA("CCSPlayer_AimPunchServices", "m_predictableBaseAngle"_hash);
-        g_punchUnpredOff = SCHEMA("CCSPlayer_AimPunchServices", "m_unpredictableBaseAngle"_hash);
         g_recoilIndexOff = SCHEMA("C_CSWeaponBase", "m_flRecoilIndex"_hash);
         g_shotsFiredOff = SCHEMA("C_CSPlayerPawn", "m_iShotsFired"_hash);
         g_spreadOff = SCHEMA("CCSWeaponBaseVData", "m_flSpread"_hash);
+        g_nextPrimaryTickOff = SCHEMA("C_BasePlayerWeapon", "m_nNextPrimaryAttackTick"_hash);
 
-        printf("[Rage] schema: tickBase=0x%X attrMgr=0x%X attrItem=0x%X itemDef=0x%X punchPred=0x%X punchUnpred=0x%X recoilIdx=0x%X shotsFired=0x%X spread=0x%X\n",
+        printf("[Rage] schema: tickBase=0x%X attrMgr=0x%X attrItem=0x%X itemDef=0x%X recoilIdx=0x%X shotsFired=0x%X spread=0x%X nextPrimary=0x%X\n",
             g_tickBaseOff, g_attrMgrOff, g_attrItemOff, g_itemDefIdxOff,
-            g_punchPredOff, g_punchUnpredOff, g_recoilIndexOff, g_shotsFiredOff, g_spreadOff);
+            g_recoilIndexOff, g_shotsFiredOff, g_spreadOff, g_nextPrimaryTickOff);
         fflush(stdout);
     }
 
@@ -392,7 +405,7 @@ namespace Rage {
     };
 
     static ScanResult DoScan(uintptr_t localPawn, const WeaponState& ws,
-        const Vec3& eye, const Vec3& curAngles)
+        const Vec3& eye, const Vec3& curAngles, const WeaponSettings& cfg)
     {
         ScanResult out{};
 
@@ -401,10 +414,10 @@ namespace Rage {
 
         const auto enemies = CombatShared::GetEnemiesCached();
         const int localTeam = ReadTeam(localPawn);
-        const uint32_t mask = (uint32_t)g_hitboxes;
+        const uint32_t mask = (uint32_t)cfg.hitboxes;
         const float maxFov = 180.0f;
-        const int teamCheck = g_teamCheck;
-        const int minDamage = g_minDamage;
+        const int teamCheck = (int)cfg.teamCheck;
+        const int minDamage = (int)cfg.minDamage;
 
         float bestFov = maxFov + 0.001f;
         int bestPriority = -1;
@@ -471,7 +484,7 @@ namespace Rage {
 
         const bool wasAttacking = g_rageAttackWritten.load();
 
-        if (g_enabled == 0 || Renderer::IsMenuOpen() || !IsGameFocused()) {
+        if (Renderer::IsMenuOpen() || !IsGameFocused()) {
             if (wasAttacking) {
                 cmd->buttons.value &= ~1ull;
                 cmd->buttons.value_changed |= 1ull;
@@ -512,19 +525,47 @@ namespace Rage {
 
         WeaponState ws = GetWeaponState(localPawn, false);
 
-        ScanResult res = DoScan(localPawn, ws, eye, curAngles);
+        if (!ws.valid || ws.weaponType < 1 || ws.weaponType > 6) {
+            if (wasAttacking) {
+                cmd->buttons.value &= ~1ull;
+                cmd->buttons.value_changed |= 1ull;
+                g_rageAttackWritten.store(false);
+            }
+            return;
+        }
 
-        const bool autoShoot = (g_autoShoot != 0);
+        const Group group = GroupFromWeaponType(ws.weaponType);
+        const WeaponSettings& cfg = g_weapons[(int)group];
+
+        if (cfg.enabled == 0) {
+            if (wasAttacking) {
+                cmd->buttons.value &= ~1ull;
+                cmd->buttons.value_changed |= 1ull;
+                g_rageAttackWritten.store(false);
+            }
+            return;
+        }
+
+        ScanResult res = DoScan(localPawn, ws, eye, curAngles, cfg);
+
+        const bool autoShoot = (cfg.autoShoot != 0);
         const bool wantFire = autoShoot && res.valid;
 
+        const uintptr_t lc = CombatShared::GetLocalController();
+        const int tickBase = ReadTickBase(lc);
+
+        int nextPrimaryTick = 0;
+        if (g_nextPrimaryTickOff && ws.weapon > 0x10000) {
+            SafeReadI32(ws.weapon + g_nextPrimaryTickOff, &nextPrimaryTick);
+        }
+        const bool weaponReady = (tickBase > 0) && (tickBase >= nextPrimaryTick);
+        const bool canFire = wantFire && weaponReady;
+
         const math::vector3 userAngleVec{ curAngles.x, curAngles.y, 0.0f };
-        const bool silent = (g_silent != 0);
+        const bool silent = (cfg.silent != 0);
         math::vector3 writeAngle = res.valid ? res.angle : userAngleVec;
 
-        if (wantFire && g_noSpread != 0) {
-            const uintptr_t lc = CombatShared::GetLocalController();
-            const int tickBase = ReadTickBase(lc);
-
+        if (canFire && cfg.noSpread != 0) {
             WeaponState wsAcc = GetWeaponStateWithAccuracy(localPawn, tickBase);
 
             if (wsAcc.valid && tickBase > 0) {
@@ -579,7 +620,7 @@ namespace Rage {
             }
         }
 
-        if (wantFire) {
+        if (canFire) {
             cmd->buttons.value |= 1ull;
             cmd->buttons.value_changed |= 1ull;
             cmd->buttons.value_scroll |= 1ull;
@@ -617,40 +658,34 @@ namespace Rage {
 
     void Tick() {}
 
-    bool IsEnabled() { return g_enabled != 0; }
-    void SetEnabled(bool enabled) {
-        InterlockedExchange(&g_enabled, enabled ? 1 : 0);
+    bool IsEnabled(Group g) { return g_weapons[(int)g].enabled != 0; }
+    void SetEnabled(Group g, bool enabled) {
+        InterlockedExchange(&g_weapons[(int)g].enabled, enabled ? 1 : 0);
         if (!enabled) g_rageAttackWritten.store(false);
     }
 
-    bool IsTeamCheck() { return g_teamCheck != 0; }
-    void SetTeamCheck(bool enabled) { InterlockedExchange(&g_teamCheck, enabled ? 1 : 0); }
+    bool IsAutoShoot(Group g) { return g_weapons[(int)g].autoShoot != 0; }
+    void SetAutoShoot(Group g, bool enabled) { InterlockedExchange(&g_weapons[(int)g].autoShoot, enabled ? 1 : 0); }
 
-    uint32_t GetHitboxes() { return (uint32_t)g_hitboxes; }
-    void SetHitboxes(uint32_t mask) {
-        if (mask == 0) mask = HB_HEAD;
-        InterlockedExchange(&g_hitboxes, (LONG)mask);
-    }
+    bool IsSilent(Group g) { return g_weapons[(int)g].silent != 0; }
+    void SetSilent(Group g, bool enabled) { InterlockedExchange(&g_weapons[(int)g].silent, enabled ? 1 : 0); }
 
-    float GetFov() { return 180.0f; }
-    void SetFov(float) {}
+    bool IsNoSpread(Group g) { return g_weapons[(int)g].noSpread != 0; }
+    void SetNoSpread(Group g, bool enabled) { InterlockedExchange(&g_weapons[(int)g].noSpread, enabled ? 1 : 0); }
 
-    int GetMinDamage() { return g_minDamage; }
-    void SetMinDamage(int damage) {
+    bool IsTeamCheck(Group g) { return g_weapons[(int)g].teamCheck != 0; }
+    void SetTeamCheck(Group g, bool enabled) { InterlockedExchange(&g_weapons[(int)g].teamCheck, enabled ? 1 : 0); }
+
+    int GetMinDamage(Group g) { return (int)g_weapons[(int)g].minDamage; }
+    void SetMinDamage(Group g, int damage) {
         if (damage < 1) damage = 1;
         if (damage > 130) damage = 130;
-        InterlockedExchange(&g_minDamage, damage);
+        InterlockedExchange(&g_weapons[(int)g].minDamage, damage);
     }
 
-    bool IsSilent() { return g_silent != 0; }
-    void SetSilent(bool enabled) { InterlockedExchange(&g_silent, enabled ? 1 : 0); }
-
-    bool IsAutoShoot() { return g_autoShoot != 0; }
-    void SetAutoShoot(bool enabled) { InterlockedExchange(&g_autoShoot, enabled ? 1 : 0); }
-
-    bool IsNoSpread() { return g_noSpread != 0; }
-    void SetNoSpread(bool enabled) { InterlockedExchange(&g_noSpread, enabled ? 1 : 0); }
-
-    bool IsAutoScope() { return false; }
-    void SetAutoScope(bool) {}
+    uint32_t GetHitboxes(Group g) { return (uint32_t)g_weapons[(int)g].hitboxes; }
+    void SetHitboxes(Group g, uint32_t mask) {
+        if (mask == 0) mask = HB_HEAD;
+        InterlockedExchange(&g_weapons[(int)g].hitboxes, (LONG)mask);
+    }
 }
