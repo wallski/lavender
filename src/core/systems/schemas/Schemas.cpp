@@ -24,6 +24,17 @@ namespace systems {
             printf("[schemas] self-test: CCSPlayerController::m_hPlayerPawn = 0x%X\n", test);
             fflush(stdout);
 
+            const auto gsn = lookup("C_BaseEntity", "m_pGameSceneNode"_hash);
+            const auto simTime = lookup("C_BaseEntity", "m_flSimulationTime"_hash);
+            const auto modelState = lookup("CSkeletonInstance", "m_modelState"_hash);
+            const auto absOrigin = lookup("CGameSceneNode", "m_vecAbsOrigin"_hash);
+            const auto absRot = lookup("CGameSceneNode", "m_angAbsRotation"_hash);
+            const auto tickBase = lookup("CBasePlayerController", "m_nTickBase"_hash);
+
+            printf("[schemas] diag: gsn=0x%X simTime=0x%X modelState=0x%X absOrigin=0x%X absRot=0x%X tickBase=0x%X\n",
+                gsn, simTime, modelState, absOrigin, absRot, tickBase);
+            fflush(stdout);
+
             return true;
         }
 

@@ -1,9 +1,11 @@
 #include "pch.h"
 #include "Rage.h"
 #include "NoSpread.h"
+#include "../Penetration.h"
 #include "core/features/combat/CombatShared.h"
 #include "core/features/combat/Lagcomp.h"
 #include "core/systems/Tracing.h"
+#include "core/systems/systems.hpp"
 #include "core/hooks/CreateMoveHook.h"
 #include "core/features/combat/legit/triggerbot/UsercmdLayout.h"
 #include "core/systems/schemas/Schemas.h"
@@ -24,10 +26,12 @@ namespace Rage {
         volatile LONG autoShoot = 1;
         volatile LONG silent = 1;
         volatile LONG noSpread = 0;
+        volatile LONG autowall = 0;
         volatile LONG teamCheck = 1;
         volatile LONG backtrack = 1;
         volatile LONG minDamage = 1;
         volatile LONG hitboxes = 0x1F;
+        volatile LONG pointscale = 50;
     };
 
     static WeaponSettings g_weapons[(int)Group::Count];
@@ -35,6 +39,9 @@ namespace Rage {
     static std::atomic<bool> g_rageAttackWritten{ false };
     static uintptr_t g_getInaccuracyFn = 0;
     static uintptr_t g_updateAccuracyFn = 0;
+
+    static constexpr int kMaxAutowallCallsPerTick = 20;
+    static int g_autowallCallsThisTick = 0;
 
     static constexpr uint32_t HB_HEAD = 1u << 0;
     static constexpr uint32_t HB_NECK = 1u << 1;
@@ -44,26 +51,35 @@ namespace Rage {
     static constexpr uint32_t HB_ARMS = 1u << 5;
     static constexpr uint32_t HB_LEGS = 1u << 6;
 
-    struct HitboxEntry {
+    struct HitboxScan {
         uint32_t flag;
-        int boneIndex;
+        int hitboxIndex;
         int priority;
-        int hitgroup;
     };
 
-    static const HitboxEntry kHitboxes[] = {
-        { HB_HEAD,    7,  100, 1 },
-        { HB_NECK,    6,  90,  8 },
-        { HB_CHEST,   3,  50,  2 },
-        { HB_STOMACH, 2,  40,  3 },
-        { HB_PELVIS,  1,  40,  3 },
-        { HB_ARMS,    9,  20,  4 },
-        { HB_ARMS,    13, 20,  5 },
-        { HB_LEGS,    17, 10,  6 },
-        { HB_LEGS,    20, 10,  7 },
+    static const HitboxScan kScanOrder[] = {
+        { HB_HEAD,    0,  100 },
+        { HB_NECK,    1,  90  },
+        { HB_CHEST,   4,  50  },
+        { HB_CHEST,   5,  50  },
+        { HB_CHEST,   6,  50  },
+        { HB_STOMACH, 3,  40  },
+        { HB_PELVIS,  2,  40  },
+        { HB_LEGS,    7,  10  },
+        { HB_LEGS,    8,  10  },
+        { HB_LEGS,    9,  10  },
+        { HB_LEGS,    10, 10  },
+        { HB_LEGS,    11, 10  },
+        { HB_LEGS,    12, 10  },
+        { HB_ARMS,    13, 20  },
+        { HB_ARMS,    14, 20  },
+        { HB_ARMS,    15, 20  },
+        { HB_ARMS,    16, 20  },
+        { HB_ARMS,    17, 20  },
+        { HB_ARMS,    18, 20  },
     };
 
-    static constexpr size_t kHitboxCount = sizeof(kHitboxes) / sizeof(kHitboxes[0]);
+    static constexpr size_t kScanOrderCount = sizeof(kScanOrder) / sizeof(kScanOrder[0]);
     static constexpr int kMaxViewBones = 32;
     static constexpr int kMaxViews = 16;
 
@@ -138,6 +154,12 @@ namespace Rage {
 
     static bool SafeReadU32(uintptr_t addr, uint32_t* out) {
         __try { *out = *reinterpret_cast<uint32_t*>(addr); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+        return true;
+    }
+
+    static bool SafeReadU8(uintptr_t addr, uint8_t* out) {
+        __try { *out = *reinterpret_cast<uint8_t*>(addr); }
         __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
         return true;
     }
@@ -224,6 +246,24 @@ namespace Rage {
     static int ReadTeam(uintptr_t pawn) {
         __try { return *reinterpret_cast<int*>(pawn + OffsetConfig::fields.m_iTeamNum); }
         __except (EXCEPTION_EXECUTE_HANDLER) { return 0; }
+    }
+
+    static int ReadArmor(uintptr_t pawn) {
+        int a = 0;
+        __try { a = *reinterpret_cast<int*>(pawn + SCHEMA("C_CSPlayerPawn", "m_ArmorValue"_hash)); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { a = 0; }
+        return a;
+    }
+
+    static bool ReadHelmet(uintptr_t pawn, int armor) {
+        if (armor <= 0) return false;
+        uintptr_t services = 0;
+        __try { services = *reinterpret_cast<uintptr_t*>(pawn + SCHEMA("C_BasePlayerPawn", "m_pItemServices"_hash)); }
+        __except (EXCEPTION_EXECUTE_HANDLER) { services = 0; }
+        if (services < 0x10000) return false;
+        uint8_t helmet = 0;
+        SafeReadU8(services + SCHEMA("CCSPlayer_ItemServices", "m_bHasHelmet"_hash), &helmet);
+        return helmet != 0;
     }
 
     static bool ReadViewAngles(Vec3& out) {
@@ -399,6 +439,151 @@ namespace Rage {
         return dmg;
     }
 
+    static bool RayVsCapsuleLocal(const math::vector3& ray_origin, const math::vector3& ray_dir,
+        const math::vector3& capsule_a, const math::vector3& capsule_b,
+        float radius, float& out_fraction)
+    {
+        return Penetration::RayVsCapsule(ray_origin, ray_dir, capsule_a, capsule_b, radius, out_fraction);
+    }
+
+    static math::vector3 MathVec(const Vec3& v) {
+        return math::vector3{ v.x, v.y, v.z };
+    }
+
+    static math::quaternion MathQuat(const Quat& q) {
+        math::quaternion out{};
+        out.x = q.x;
+        out.y = q.y;
+        out.z = q.z;
+        out.w = q.w;
+        return out;
+    }
+
+    static std::vector<math::vector3> GenerateMultipoints(
+        const systems::hitboxes::entry& hitbox,
+        const math::vector3& center,
+        const math::quaternion& bone_rot,
+        float pointscale,
+        const math::vector3& shoot_pos,
+        float inaccuracy,
+        float spread)
+    {
+        std::vector<math::vector3> out;
+
+        float scale = pointscale / 100.0f;
+        if (scale < 0.0f) scale = 0.0f;
+        if (scale > 1.0f) scale = 1.0f;
+        if (scale <= 0.01f) return out;
+
+        const math::vector3 hb_mid = (hitbox.mins + hitbox.maxs) * 0.5f;
+        const math::vector3 capsule_a = center + bone_rot.rotate_vector(hitbox.mins - hb_mid);
+        const math::vector3 capsule_b = center + bone_rot.rotate_vector(hitbox.maxs - hb_mid);
+
+        if (hitbox.radius > 0.001f) {
+            const float cone = (inaccuracy + spread > 0.0f) ? (inaccuracy + spread) : 0.0f;
+            const float cone_radius = std::tanf(cone) * (center - shoot_pos).length();
+            const float automatic_scale = 0.9f - cone_radius / hitbox.radius;
+            const float clamped = automatic_scale < 0.0f ? 0.0f : (automatic_scale > 1.0f ? 1.0f : automatic_scale);
+            if (clamped < scale) scale = clamped;
+            if (scale <= 0.01f) return out;
+        }
+
+        const math::vector3 shoot_dir = (center - shoot_pos).normalized();
+        const math::vector3 ang = math::helpers::vector_to_angle(shoot_dir);
+
+        math::vector3 left{}, up{};
+        math::helpers::angle_vectors_left(ang, nullptr, &left, &up);
+        const math::vector3 right = math::vector3{ -left.x, -left.y, -left.z };
+
+        const auto surface_point = [&](const math::vector3& direction) -> math::vector3 {
+            const math::vector3 dir = direction.normalized();
+
+            if (hitbox.radius > 0.001f) {
+                const float reach = (capsule_b - capsule_a).length() + hitbox.radius * 2.0f + 1.0f;
+                const math::vector3 origin = center + dir * reach;
+                const math::vector3 delta = dir * (reach * -2.0f);
+                float fraction = 1.0f;
+                if (RayVsCapsuleLocal(origin, delta, capsule_a, capsule_b, hitbox.radius, fraction)) {
+                    return origin + delta * fraction;
+                }
+            }
+            else {
+                math::quaternion inverse = bone_rot;
+                inverse.x = -inverse.x;
+                inverse.y = -inverse.y;
+                inverse.z = -inverse.z;
+                const math::vector3 local_dir = inverse.rotate_vector(dir);
+                const math::vector3 extents = (hitbox.maxs - hitbox.mins) * 0.5f;
+                float distance = 8192.0f;
+
+                if (std::fabs(local_dir.x) > 1.0e-6f) distance = (std::min)(distance, std::fabs(extents.x / local_dir.x));
+                if (std::fabs(local_dir.y) > 1.0e-6f) distance = (std::min)(distance, std::fabs(extents.y / local_dir.y));
+                if (std::fabs(local_dir.z) > 1.0e-6f) distance = (std::min)(distance, std::fabs(extents.z / local_dir.z));
+
+                if (distance < 8192.0f) {
+                    return center + dir * distance;
+                }
+            }
+
+            return center;
+            };
+
+        const auto scaled_surface = [&](const math::vector3& direction) {
+            const math::vector3 surface = surface_point(direction);
+            return center + (surface - center) * scale;
+            };
+
+        switch (hitbox.index) {
+        case 0:
+            out.reserve(4);
+            out.push_back(scaled_surface(right));
+            out.push_back(scaled_surface(-right));
+            out.push_back(scaled_surface(up));
+            out.push_back(scaled_surface(-up));
+            break;
+        case 2:
+        case 3:
+            out.reserve(2);
+            out.push_back(scaled_surface(right));
+            out.push_back(scaled_surface(-right));
+            break;
+        case 4:
+        case 5:
+        case 6:
+            out.reserve(3);
+            out.push_back(scaled_surface(right));
+            out.push_back(scaled_surface(-right));
+            if (hitbox.index == 6) out.push_back(scaled_surface(up));
+            break;
+        case 7:
+        case 8:
+        case 9:
+        case 10:
+        case 11:
+        case 12:
+            out.reserve(2);
+            out.push_back(capsule_a);
+            out.push_back(capsule_b);
+            break;
+        case 13:
+        case 14:
+        case 15:
+        case 16:
+        case 17:
+        case 18:
+            out.reserve(1);
+            out.push_back(capsule_b);
+            break;
+        default:
+            out.reserve(2);
+            out.push_back(scaled_surface(right));
+            out.push_back(scaled_surface(-right));
+            break;
+        }
+
+        return out;
+    }
+
     static bool RayHitsSphere(const math::vector3& origin, const math::vector3& dir,
         const math::vector3& center, float radius)
     {
@@ -416,7 +601,6 @@ namespace Rage {
     {
         const float total = inaccuracy + spread;
         if (total < 0.0005f) return 1.0f;
-
         if (!NoSpread::IsReady()) return 1.0f;
 
         constexpr int kSamples = 64;
@@ -444,6 +628,7 @@ namespace Rage {
         int health = 0;
         int team = 0;
         int boneIndex = -1;
+        int hitboxIndex = -1;
         int hitgroup = 0;
         uint32_t hitboxFlag = 0;
         Vec3 bonePos{};
@@ -455,11 +640,13 @@ namespace Rage {
         int priority = 0;
         int tick = 0;
         Lagcomp::Record* record = nullptr;
+        bool isCenter = false;
+        bool penetrated = false;
         bool valid = false;
     };
 
     struct ScanView {
-        Vec3 bones[kMaxViewBones];
+        BoneData bones[kMaxViewBones];
         int count;
         int tick;
         Lagcomp::Record* record;
@@ -478,10 +665,10 @@ namespace Rage {
 
                     const int n = (r->boneCount < kMaxViewBones) ? r->boneCount : kMaxViewBones;
                     for (int i = 0; i < n; i++) {
-                        views[outCount].bones[i] = r->bones[i].position;
+                        views[outCount].bones[i] = r->bones[i];
                     }
                     for (int i = n; i < kMaxViewBones; i++) {
-                        views[outCount].bones[i] = Vec3();
+                        views[outCount].bones[i] = BoneData{};
                     }
 
                     views[outCount].count = n;
@@ -496,12 +683,20 @@ namespace Rage {
         if (e.headPos.Length() < 1.0f) return;
 
         for (int i = 0; i < kMaxViewBones; i++) {
-            views[0].bones[i] = e.bones[i];
+            views[0].bones[i].position = e.bones[i];
+            views[0].bones[i].rotation = Quat{ 0.0f, 0.0f, 0.0f, 1.0f };
         }
         views[0].count = kMaxViewBones;
         views[0].tick = 0;
         views[0].record = nullptr;
         outCount = 1;
+    }
+
+    static const systems::hitboxes::entry* FindHitbox(const systems::hitboxes::set& set, int index) {
+        for (const auto& hb : set) {
+            if (hb.index == index) return &hb;
+        }
+        return nullptr;
     }
 
     static void ScanEnemy(uintptr_t localPawn, const WeaponState& ws,
@@ -514,9 +709,22 @@ namespace Rage {
         const uint32_t mask = (uint32_t)cfg.hitboxes;
         const int minDamage = (int)cfg.minDamage;
         const float maxFov = 180.0f;
+        const float pointscale = (float)cfg.pointscale;
+        const bool autowallEnabled = (cfg.autowall != 0);
 
         const Vec3 curV{ curAngles.x, curAngles.y, 0.0f };
         const math::vector3 eyeM{ eye.x, eye.y, eye.z };
+
+        const int targetArmor = ReadArmor(e.pawn);
+        const bool hasHelmet = ReadHelmet(e.pawn, targetArmor);
+        const int targetTeam = e.team;
+
+        uintptr_t gsn = 0;
+        if (!SafeReadPtr(e.pawn + OffsetConfig::fields.m_pGameSceneNode, &gsn)) return;
+        if (gsn < 0x10000) return;
+
+        auto hbSet = systems::g_hitboxes.query(gsn);
+        if (hbSet.count <= 0) return;
 
         ScanView views[kMaxViews];
         int viewCount = 0;
@@ -525,59 +733,136 @@ namespace Rage {
 
         for (int vi = 0; vi < viewCount; vi++) {
             const ScanView& v = views[vi];
-            bool directHitOnThisView = false;
+            bool anyDirectHit = false;
 
-            for (size_t hi = 0; hi < kHitboxCount; hi++) {
-                const HitboxEntry& hb = kHitboxes[hi];
-                if (!(mask & hb.flag)) continue;
-                if (hb.boneIndex < 0 || hb.boneIndex >= v.count) continue;
+            std::array<bool, 20> center_sufficient{};
 
-                const Vec3& bonePos = v.bones[hb.boneIndex];
-                if (bonePos.Length() < 1.0f) continue;
+            for (size_t si = 0; si < kScanOrderCount; si++) {
+                if (anyDirectHit) break;
 
-                const Vec3 aimV = CombatShared::CalculateAngle(eye, bonePos);
-                const float fov = CombatShared::AngleDistance(curV, aimV);
-                if (fov > maxFov) continue;
+                const HitboxScan& scan = kScanOrder[si];
+                if (!(mask & scan.flag)) continue;
 
-                const float dmg = EstimateDamage(ws.damage, hb.hitgroup);
-                if ((int)dmg < minDamage) continue;
+                const systems::hitboxes::entry* hb = FindHitbox(hbSet, scan.hitboxIndex);
+                if (!hb) continue;
+                if (hb->bone < 0 || hb->bone >= v.count) continue;
 
-                const math::vector3 boneM{ bonePos.x, bonePos.y, bonePos.z };
+                const BoneData& bone = v.bones[hb->bone];
+                if (bone.position.Length() < 1.0f) continue;
 
-                auto filter = Tracing::MakeFilter(localPawn, 0x1c3003, 4);
-                auto result = Tracing::Trace(eyeM, boneM, filter);
+                const math::quaternion boneRot = MathQuat(bone.rotation);
+                const math::vector3 bonePosV = MathVec(bone.position);
 
-                const bool visible =
-                    (result.fraction >= 0.97f) ||
-                    (result.hitEntity == e.pawn);
+                const math::vector3 hb_mid = (hb->mins + hb->maxs) * 0.5f;
+                const math::vector3 center = boneRot.rotate_vector(hb_mid) + bonePosV;
 
-                if (!visible) continue;
+                const int hitgroup = systems::g_hitboxes.hitgroup_from_hitbox(hb->index);
 
-                ScanHit h{};
-                h.pawn = e.pawn;
-                h.health = e.health;
-                h.team = e.team;
-                h.boneIndex = hb.boneIndex;
-                h.hitgroup = hb.hitgroup;
-                h.hitboxFlag = hb.flag;
-                h.bonePos = bonePos;
-                h.aimAngle = math::vector3{ aimV.x, aimV.y, 0.0f };
-                h.fov = fov;
-                h.damage = dmg;
-                h.priority = hb.priority;
-                h.tick = v.tick;
-                h.record = v.record;
-                h.valid = true;
+                std::vector<math::vector3> points;
+                points.reserve(5);
+                points.push_back(center);
 
-                out.push_back(h);
-                directHitOnThisView = true;
+                if (pointscale > 0.5f) {
+                    auto mps = GenerateMultipoints(*hb, center, boneRot, pointscale, eyeM,
+                        ws.inaccuracy, ws.spread);
+                    for (const auto& mp : mps) {
+                        bool dup = false;
+                        for (const auto& p : points) {
+                            if ((p - mp).length_sqr() < 0.01f) { dup = true; break; }
+                        }
+                        if (!dup) points.push_back(mp);
+                    }
+                }
+
+                const bool centerSufficient = (hb->index >= 0 && hb->index < 20)
+                    ? center_sufficient[hb->index] : false;
+
+                for (size_t pi = 0; pi < points.size(); pi++) {
+                    const bool isCenter = (pi == 0);
+
+                    if (!isCenter && centerSufficient) continue;
+
+                    const math::vector3& pt = points[pi];
+                    const Vec3 ptV{ pt.x, pt.y, pt.z };
+
+                    const Vec3 aimV = CombatShared::CalculateAngle(eye, ptV);
+                    const float fov = CombatShared::AngleDistance(curV, aimV);
+                    if (fov > maxFov) continue;
+
+                    float finalDmg = 0.0f;
+                    int finalHitgroup = hitgroup;
+                    bool penetrated = false;
+                    bool gotHit = false;
+
+                    auto filter = Tracing::MakeFilter(localPawn, 0x1c3003, 4);
+                    auto result = Tracing::Trace(eyeM, pt, filter);
+
+                    const bool visible =
+                        (result.fraction >= 0.97f) ||
+                        (result.hitEntity == e.pawn);
+
+                    if (visible) {
+                        finalDmg = Penetration::GetMaxDamage(hitgroup, targetArmor, hasHelmet, targetTeam);
+                        gotHit = true;
+                    }
+                    else if (autowallEnabled && isCenter && vi == 0 && g_autowallCallsThisTick < kMaxAutowallCallsPerTick) {
+                        g_autowallCallsThisTick++;
+
+                        Penetration::Result penResult{};
+                        bool awOk = Penetration::Run(eyeM, pt, e.pawn, localPawn, localTeam, v.record, penResult);
+
+                        if (awOk) {
+                            const bool isHeadHitbox = (hb->index == 0);
+
+                            if (isHeadHitbox && penResult.hitgroup != 1) {
+                                continue;
+                            }
+
+                            finalDmg = penResult.damage;
+                            finalHitgroup = penResult.hitgroup;
+                            penetrated = penResult.penetrated;
+                            gotHit = true;
+                        }
+                    }
+
+                    if (!gotHit) continue;
+                    if (finalDmg < (float)minDamage) continue;
+
+                    ScanHit h{};
+                    h.pawn = e.pawn;
+                    h.health = e.health;
+                    h.team = e.team;
+                    h.boneIndex = hb->bone;
+                    h.hitboxIndex = hb->index;
+                    h.hitgroup = finalHitgroup;
+                    h.hitboxFlag = scan.flag;
+                    h.bonePos = ptV;
+                    h.aimAngle = math::vector3{ aimV.x, aimV.y, 0.0f };
+                    h.fov = fov;
+                    h.damage = finalDmg;
+                    h.priority = scan.priority;
+                    h.tick = v.tick;
+                    h.record = v.record;
+                    h.isCenter = isCenter;
+                    h.penetrated = penetrated;
+                    h.valid = true;
+
+                    out.push_back(h);
+                    anyDirectHit = true;
+
+                    if (isCenter && hb->index >= 0 && hb->index < 20) {
+                        center_sufficient[hb->index] = !penetrated || finalDmg >= (float)e.health;
+                    }
+
+                    break;
+                }
             }
 
-            if (directHitOnThisView) break;
+            if (anyDirectHit) break;
         }
     }
 
-    static ScanHit SelectBest(const WeaponState& ws, const std::vector<ScanHit>& hits) {
+    static ScanHit SelectBest(const WeaponState& ws, const Vec3& eye, const std::vector<ScanHit>& hits) {
         ScanHit best{};
 
         for (const auto& h : hits) {
@@ -589,6 +874,8 @@ namespace Rage {
             score += lethal ? 1000000.0f : 0.0f;
             score += h.damage * 20.0f;
             score += (float)h.priority * 50.0f;
+            score += h.isCenter ? 100.0f : 0.0f;
+            score += h.penetrated ? 0.0f : 250.0f;
             score -= h.fov * 1.0f;
 
             bool isBetter = !best.valid || score > best.score;
@@ -598,6 +885,9 @@ namespace Rage {
                 }
                 else if (h.priority != best.priority) {
                     isBetter = h.priority > best.priority;
+                }
+                else if (h.isCenter != best.isCenter) {
+                    isBetter = h.isCenter;
                 }
                 else {
                     isBetter = h.fov < best.fov;
@@ -610,10 +900,9 @@ namespace Rage {
                 best.hitchance = 1.0f;
 
                 if (ws.valid && (ws.inaccuracy > 0.0005f || ws.spread > 0.0005f)) {
-                    const float radius = (h.hitboxFlag == HB_HEAD) ? 4.0f : 6.0f;
+                    const float radius = (h.hitboxIndex == 0) ? 4.0f : 6.0f;
                     best.hitchance = CalculateHitchance(
-                        Vec3(0.0f, 0.0f, 0.0f),
-                        h.aimAngle, h.bonePos, radius,
+                        eye, h.aimAngle, h.bonePos, radius,
                         ws.inaccuracy, ws.spread, ws.recoilIndex,
                         ws.itemDefIdx, ws.numBullets);
                 }
@@ -628,6 +917,8 @@ namespace Rage {
         if (!cmd) return;
 
         const bool wasAttacking = g_rageAttackWritten.load();
+
+        g_autowallCallsThisTick = 0;
 
         if (Renderer::IsMenuOpen() || !IsGameFocused()) {
             if (wasAttacking) {
@@ -691,9 +982,13 @@ namespace Rage {
             return;
         }
 
+        if (cfg.autowall != 0) {
+            Penetration::Prepare(ws.vdata, ws.weapon);
+        }
+
         std::vector<ScanHit> hits;
         const auto enemies = CombatShared::GetEnemiesCached();
-        hits.reserve(enemies.size() * 4);
+        hits.reserve(enemies.size() * 8);
 
         for (const auto& e : enemies) {
             if (e.health <= 0) continue;
@@ -701,7 +996,7 @@ namespace Rage {
             ScanEnemy(localPawn, ws, eye, curAngles, cfg, e, hits);
         }
 
-        ScanHit best = SelectBest(ws, hits);
+        ScanHit best = SelectBest(ws, eye, hits);
 
         const bool autoShoot = (cfg.autoShoot != 0);
         const bool wantFire = autoShoot && best.valid;
@@ -835,11 +1130,21 @@ namespace Rage {
     bool IsNoSpread(Group g) { return g_weapons[(int)g].noSpread != 0; }
     void SetNoSpread(Group g, bool enabled) { InterlockedExchange(&g_weapons[(int)g].noSpread, enabled ? 1 : 0); }
 
+    bool IsAutowall(Group g) { return g_weapons[(int)g].autowall != 0; }
+    void SetAutowall(Group g, bool enabled) { InterlockedExchange(&g_weapons[(int)g].autowall, enabled ? 1 : 0); }
+
     bool IsTeamCheck(Group g) { return g_weapons[(int)g].teamCheck != 0; }
     void SetTeamCheck(Group g, bool enabled) { InterlockedExchange(&g_weapons[(int)g].teamCheck, enabled ? 1 : 0); }
 
     bool IsBacktrack(Group g) { return g_weapons[(int)g].backtrack != 0; }
     void SetBacktrack(Group g, bool enabled) { InterlockedExchange(&g_weapons[(int)g].backtrack, enabled ? 1 : 0); }
+
+    int GetPointscale(Group g) { return (int)g_weapons[(int)g].pointscale; }
+    void SetPointscale(Group g, int scale) {
+        if (scale < 0) scale = 0;
+        if (scale > 100) scale = 100;
+        InterlockedExchange(&g_weapons[(int)g].pointscale, scale);
+    }
 
     int GetMinDamage(Group g) { return (int)g_weapons[(int)g].minDamage; }
     void SetMinDamage(Group g, int damage) {

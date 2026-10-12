@@ -282,6 +282,21 @@ namespace Tracing {
         __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
 
+    void TraceBullet(TraceData* traceData, float damage, float penetration, float rangeModifier, int penetrationCount, int team, uintptr_t unknown) {
+        if (!g_traceBullet || !traceData) return;
+        __try {
+            Memory::Call<void>(g_traceBullet,
+                reinterpret_cast<uintptr_t>(traceData),
+                damage,
+                penetration,
+                rangeModifier,
+                static_cast<uintptr_t>(penetrationCount),
+                static_cast<uintptr_t>(team),
+                unknown);
+        }
+        __except (EXCEPTION_EXECUTE_HANDLER) {}
+    }
+
     bool IsVisible(const math::vector3& start, const math::vector3& end, uintptr_t targetEntity, uintptr_t skipEntity, uintptr_t mask) {
         auto currentStart = start;
         auto skip = skipEntity;

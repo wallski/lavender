@@ -153,6 +153,9 @@
     <ClCompile Include="src\core\features\visuals\backtrack\Backtrack.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="src\core\features\combat\Penetration.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\memory\PatternScan.h">
@@ -315,6 +318,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\core\features\visuals\backtrack\Backtrack.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\core\features\combat\Penetration.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

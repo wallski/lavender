@@ -52,21 +52,21 @@ namespace Tracing {
 
     struct TraceData {
         int unknown1;
-        float unknown2;
+        float unknown2{ 52.0f };
         void* arrayPointer;
-        int unknown3;
-        int unknown4;
+        int unknown3{ 128 };
+        int unknown4{ static_cast<int>(0x80000000) };
         TraceArrayElement elements[0x80];
         uint8_t pad0[0x8];
         int numHits;
         int unknown5;
         void* hitArrayPointer;
-        int hitCapacity;
-        int hitFlags;
+        int hitCapacity{ 8 };
+        int hitFlags{ static_cast<int>(0x80000000) };
         uint8_t hitElements[0xc0];
         math::vector3 start;
         math::vector3 direction;
-        float fraction;
+        float fraction{ 1.0f };
         bool unknown6;
         uint8_t pad1[0x4b];
     };
@@ -91,6 +91,7 @@ namespace Tracing {
     void SetupTrace(TraceData* traceData, const math::vector3& start, const math::vector3& delta, const Filter& filter, int penetrationCount, bool traceWorld);
     void InitResult(Result* result);
     void FinalizeTrace(TraceData* traceData, Result* result, float unknown, void* unk);
+    void TraceBullet(TraceData* traceData, float damage, float penetration, float rangeModifier, int penetrationCount, int team, uintptr_t unknown);
 
     bool IsVisible(const math::vector3& start, const math::vector3& end, uintptr_t targetEntity, uintptr_t skipEntity, uintptr_t mask = 0x1c3003);
 }

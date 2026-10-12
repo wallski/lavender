@@ -14,6 +14,9 @@ namespace systems {
 
 #define SCHEMA(class_name, field_hash) \
     ([]() -> std::uint32_t { \
-        static const auto val = ::systems::schemas::lookup(class_name, field_hash); \
+        static std::uint32_t val = 0; \
+        if (val == 0) { \
+            val = ::systems::schemas::lookup(class_name, field_hash); \
+        } \
         return val; \
     }())

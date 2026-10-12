@@ -122,11 +122,13 @@ namespace Menu {
         bool autoShoot = Rage::IsAutoShoot(g);
         bool silent = Rage::IsSilent(g);
         bool noSpread = Rage::IsNoSpread(g);
+        bool autowall = Rage::IsAutowall(g);
         bool teamCheck = Rage::IsTeamCheck(g);
         bool backtrack = Rage::IsBacktrack(g);
+        int pointscale = Rage::GetPointscale(g);
         int minDamage = Rage::GetMinDamage(g);
 
-        Widgets::BeginCard("WEAPON", 7);
+        Widgets::BeginCard("WEAPON", 9);
 
         if (Widgets::Toggle("Enabled", &enabled)) {
             Rage::SetEnabled(g, enabled);
@@ -140,11 +142,17 @@ namespace Menu {
         if (Widgets::Toggle("No spread", &noSpread)) {
             Rage::SetNoSpread(g, noSpread);
         }
+        if (Widgets::Toggle("Autowall", &autowall)) {
+            Rage::SetAutowall(g, autowall);
+        }
         if (Widgets::Toggle("Team check", &teamCheck)) {
             Rage::SetTeamCheck(g, teamCheck);
         }
         if (Widgets::Toggle("Backtrack", &backtrack)) {
             Rage::SetBacktrack(g, backtrack);
+        }
+        if (Widgets::SliderInt("Point scale", &pointscale, 0, 100)) {
+            Rage::SetPointscale(g, pointscale);
         }
         if (Widgets::SliderInt("Min damage", &minDamage, 1, 130)) {
             Rage::SetMinDamage(g, minDamage);

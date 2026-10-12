@@ -31,9 +31,11 @@ namespace ConfigManager {
         bool autoShoot = true;
         bool silent = true;
         bool noSpread = false;
+        bool autowall = false;
         bool teamCheck = true;
         bool backtrack = true;
         int minDamage = 1;
+        int pointscale = 50;
         uint32_t hitboxes = 0x1F;
     };
 
@@ -187,8 +189,10 @@ namespace ConfigManager {
             else if (suffix == "auto_shoot") rg.autoShoot = ParseBool(val);
             else if (suffix == "silent") rg.silent = ParseBool(val);
             else if (suffix == "no_spread") rg.noSpread = ParseBool(val);
+            else if (suffix == "autowall") rg.autowall = ParseBool(val);
             else if (suffix == "team_check") rg.teamCheck = ParseBool(val);
             else if (suffix == "backtrack") rg.backtrack = ParseBool(val);
+            else if (suffix == "pointscale") rg.pointscale = ParseInt(val, rg.pointscale);
             else if (suffix == "min_damage") rg.minDamage = ParseInt(val, rg.minDamage);
             else if (suffix == "hitboxes") rg.hitboxes = (uint32_t)ParseInt(val, (int)rg.hitboxes);
             return true;
@@ -340,8 +344,6 @@ namespace ConfigManager {
         else if (key == "aim.smooth") d.aimSmooth = ParseInt(val, d.aimSmooth);
         else if (key == "aim.on_accuracy") d.aimOnAccuracy = ParseBool(val);
         else if (key == "aim.accuracy_speed") d.aimAccuracySpeed = ParseFloat(val, d.aimAccuracySpeed);
-
-        else if (key == "lagcomp.max_ticks") d.menuKey = d.menuKey;
 
         else if (key == "menu.key") d.menuKey = ParseInt(val, d.menuKey);
         else if (key == "menu.accent_r") d.accent[0] = ParseFloat(val, d.accent[0]);
@@ -552,8 +554,10 @@ namespace ConfigManager {
             f << prefix << "auto_shoot=" << (Rage::IsAutoShoot(g) ? 1 : 0) << "\n";
             f << prefix << "silent=" << (Rage::IsSilent(g) ? 1 : 0) << "\n";
             f << prefix << "no_spread=" << (Rage::IsNoSpread(g) ? 1 : 0) << "\n";
+            f << prefix << "autowall=" << (Rage::IsAutowall(g) ? 1 : 0) << "\n";
             f << prefix << "team_check=" << (Rage::IsTeamCheck(g) ? 1 : 0) << "\n";
             f << prefix << "backtrack=" << (Rage::IsBacktrack(g) ? 1 : 0) << "\n";
+            f << prefix << "pointscale=" << Rage::GetPointscale(g) << "\n";
             f << prefix << "min_damage=" << Rage::GetMinDamage(g) << "\n";
             f << prefix << "hitboxes=" << (unsigned int)Rage::GetHitboxes(g) << "\n";
         }
@@ -706,8 +710,10 @@ namespace ConfigManager {
             Rage::SetAutoShoot(g, rg.autoShoot);
             Rage::SetSilent(g, rg.silent);
             Rage::SetNoSpread(g, rg.noSpread);
+            Rage::SetAutowall(g, rg.autowall);
             Rage::SetTeamCheck(g, rg.teamCheck);
             Rage::SetBacktrack(g, rg.backtrack);
+            Rage::SetPointscale(g, rg.pointscale);
             Rage::SetMinDamage(g, rg.minDamage);
             Rage::SetHitboxes(g, rg.hitboxes);
         }

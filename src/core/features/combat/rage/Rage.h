@@ -29,11 +29,17 @@ namespace Rage {
     bool IsNoSpread(Group g);
     void SetNoSpread(Group g, bool enabled);
 
+    bool IsAutowall(Group g);
+    void SetAutowall(Group g, bool enabled);
+
     bool IsTeamCheck(Group g);
     void SetTeamCheck(Group g, bool enabled);
 
     bool IsBacktrack(Group g);
     void SetBacktrack(Group g, bool enabled);
+
+    int GetPointscale(Group g);
+    void SetPointscale(Group g, int scale);
 
     int GetMinDamage(Group g);
     void SetMinDamage(Group g, int damage);

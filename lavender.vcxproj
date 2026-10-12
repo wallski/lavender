@@ -190,6 +190,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="src\core\features\combat\Lagcomp.cpp" />
+    <ClCompile Include="src\core\features\combat\Penetration.cpp" />
     <ClCompile Include="src\core\features\combat\rage\NoSpread.cpp" />
     <ClCompile Include="src\core\features\combat\rage\Rage.cpp" />
     <ClCompile Include="src\core\features\visuals\backtrack\Backtrack.cpp" />
@@ -287,6 +288,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\core\features\combat\Lagcomp.h" />
+    <ClInclude Include="src\core\features\combat\Penetration.h" />
     <ClInclude Include="src\core\features\combat\rage\NoSpread.h" />
     <ClInclude Include="src\core\features\combat\rage\Rage.h" />
     <ClInclude Include="src\core\features\visuals\backtrack\Backtrack.h" />
