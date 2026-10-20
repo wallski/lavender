@@ -200,9 +200,11 @@ namespace Rage {
         g_spreadOff = SCHEMA("CCSWeaponBaseVData", "m_flSpread"_hash);
         g_nextPrimaryTickOff = SCHEMA("C_BasePlayerWeapon", "m_nNextPrimaryAttackTick"_hash);
 
-        printf("[Rage] schema: tickBase=0x%X attrMgr=0x%X attrItem=0x%X itemDef=0x%X recoilIdx=0x%X shotsFired=0x%X spread=0x%X nextPrimary=0x%X\n",
+        printf("[Rage] schema: tickBase=0x%X attrMgr=0x%X attrItem=0x%X itemDef=0x%X recoilIdx=0x%X shotsFired=0x%X spread=0x%X nextPrimary=0x%X wt=0x%X bullets=0x%X\n",
             g_tickBaseOff, g_attrMgrOff, g_attrItemOff, g_itemDefIdxOff,
-            g_recoilIndexOff, g_shotsFiredOff, g_spreadOff, g_nextPrimaryTickOff);
+            g_recoilIndexOff, g_shotsFiredOff, g_spreadOff, g_nextPrimaryTickOff,
+            SCHEMA("CCSWeaponBaseVData", "m_WeaponType"_hash),
+            SCHEMA("CCSWeaponBaseVData", "m_nNumBullets"_hash));
         fflush(stdout);
     }
 
@@ -724,7 +726,44 @@ namespace Rage {
         if (gsn < 0x10000) return;
 
         auto hbSet = systems::g_hitboxes.query(gsn);
-        if (hbSet.count <= 0) return;
+
+        if (hbSet.count <= 0) {
+            if ((mask & HB_HEAD) && e.headPos.Length() > 1.0f) {
+                const Vec3 ptV = e.headPos;
+                const Vec3 aimV = CombatShared::CalculateAngle(eye, ptV);
+                const float fov = CombatShared::AngleDistance(curV, aimV);
+                if (fov <= maxFov) {
+                    auto filter = Tracing::MakeFilter(localPawn, 0x1c3003, 4);
+                    auto result = Tracing::Trace(eyeM, MathVec(ptV), filter);
+                    const bool visible = (result.fraction >= 0.97f) || (result.hitEntity == e.pawn);
+                    if (visible) {
+                        float finalDmg = Penetration::GetMaxDamage(1, targetArmor, hasHelmet, targetTeam);
+                        if (finalDmg >= minDamage) {
+                            ScanHit h{};
+                            h.pawn = e.pawn;
+                            h.health = e.health;
+                            h.team = e.team;
+                            h.boneIndex = 7;
+                            h.hitboxIndex = 0;
+                            h.hitgroup = 1;
+                            h.hitboxFlag = HB_HEAD;
+                            h.bonePos = ptV;
+                            h.aimAngle = math::vector3{ aimV.x, aimV.y, 0.0f };
+                            h.fov = fov;
+                            h.damage = finalDmg;
+                            h.priority = 100;
+                            h.tick = 0;
+                            h.record = nullptr;
+                            h.isCenter = true;
+                            h.penetrated = false;
+                            h.valid = true;
+                            out.push_back(h);
+                        }
+                    }
+                }
+            }
+            return;
+        }
 
         ScanView views[kMaxViews];
         int viewCount = 0;
@@ -961,7 +1000,7 @@ namespace Rage {
 
         WeaponState ws = GetWeaponState(localPawn, false);
 
-        if (!ws.valid || ws.weaponType < 1 || ws.weaponType > 6) {
+        if (!ws.valid) {
             if (wasAttacking) {
                 cmd->buttons.value &= ~1ull;
                 cmd->buttons.value_changed |= 1ull;
@@ -982,9 +1021,7 @@ namespace Rage {
             return;
         }
 
-        if (cfg.autowall != 0) {
-            Penetration::Prepare(ws.vdata, ws.weapon);
-        }
+        Penetration::Prepare(ws.vdata, ws.weapon);
 
         std::vector<ScanHit> hits;
         const auto enemies = CombatShared::GetEnemiesCached();
@@ -1008,6 +1045,7 @@ namespace Rage {
         if (g_nextPrimaryTickOff && ws.weapon > 0x10000) {
             SafeReadI32(ws.weapon + g_nextPrimaryTickOff, &nextPrimaryTick);
         }
+
         const bool weaponReady = (tickBase > 0) && (tickBase >= nextPrimaryTick);
         const bool canFire = wantFire && weaponReady;
 

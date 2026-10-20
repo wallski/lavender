@@ -368,6 +368,46 @@ namespace Lagcomp {
         return out;
     }
 
+    std::vector<RenderSnapshot> GetRenderSnapshots(uintptr_t pawn) {
+        std::vector<RenderSnapshot> out;
+
+        RefreshCache();
+
+        std::shared_lock lock(g_mtx);
+
+        auto it = g_records.find(pawn);
+        if (it == g_records.end()) return out;
+
+        out.reserve(it->second.size());
+
+        for (auto& rec : it->second) {
+            if (!IsRecordValid(rec)) continue;
+
+            RenderSnapshot s;
+            s.boneCount = (rec.boneCount < (int)s.bonePositions.size())
+                ? rec.boneCount
+                : (int)s.bonePositions.size();
+            for (int i = 0; i < s.boneCount; i++) {
+                s.bonePositions[i] = rec.bones[i].position;
+            }
+            s.tick = rec.tick;
+            out.push_back(std::move(s));
+        }
+
+        if (out.empty()) return out;
+
+        const int maxTicks = (int)g_maxTicks;
+        const int newestTick = out.front().tick;
+
+        out.erase(
+            std::remove_if(out.begin(), out.end(), [newestTick, maxTicks](const RenderSnapshot& s) {
+                return (newestTick - s.tick) > maxTicks;
+                }),
+            out.end());
+
+        return out;
+    }
+
     Record* GetOldestValid(uintptr_t pawn) {
         std::shared_lock lock(g_mtx);
 

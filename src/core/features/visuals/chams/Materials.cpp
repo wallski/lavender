@@ -16,6 +16,7 @@ namespace Materials {
 
     struct StrongHandle {
         uintptr_t binding;
+        uintptr_t pad[7];
     };
 
     static uintptr_t g_setType = 0;
@@ -23,6 +24,7 @@ namespace Materials {
     static uintptr_t g_loadKV3 = 0;
     static uintptr_t g_createMaterial = 0;
     static uintptr_t g_materials[(int)Id::Count] = {};
+    static StrongHandle g_handles[(int)Id::Count] = {};
 
     static const char* g_paths[(int)Id::Count] = {
         "",
@@ -205,8 +207,9 @@ namespace Materials {
         }
     }
 
-    static uintptr_t LoadMaterial(const char* kv, const char* name) {
+    static uintptr_t LoadMaterial(const char* kv, const char* name, int index) {
         if (!g_setType || !g_loadKV3 || !g_destroy || !g_createMaterial) return 0;
+        if (index < 0 || index >= (int)Id::Count) return 0;
 
         KeyValues3 kv3{};
         auto setResult = Memory::Call<KeyValues3*>(g_setType, &kv3, 1u, 6u);
@@ -219,7 +222,10 @@ namespace Materials {
             return 0;
         }
 
-        StrongHandle handle{};
+        StrongHandle& handle = g_handles[index];
+        handle.binding = 0;
+        for (auto& p : handle.pad) p = 0;
+
         Memory::Call<void*>(g_createMaterial,
             (void*)nullptr,
             (void*)&handle,
@@ -253,7 +259,7 @@ namespace Materials {
         for (int i = 1; i < (int)Id::Count; i++) {
             const auto kv = GetKV((Id)i);
             if (!kv) continue;
-            g_materials[i] = LoadMaterial(kv, g_paths[i]);
+            g_materials[i] = LoadMaterial(kv, g_paths[i], i);
             if (g_materials[i]) loaded++;
         }
 
@@ -264,6 +270,15 @@ namespace Materials {
 
     void Shutdown() {
         for (auto& m : g_materials) m = 0;
+        for (auto& h : g_handles) {
+            h.binding = 0;
+            for (auto& p : h.pad) p = 0;
+        }
+    }
+
+    void Reinitialize() {
+        Shutdown();
+        Initialize();
     }
 
     void Reset() {
@@ -271,7 +286,7 @@ namespace Materials {
     }
 
     uintptr_t Compile(const char* kv, const char* name) {
-        return LoadMaterial(kv, name);
+        return LoadMaterial(kv, name, 0);
     }
 
     uintptr_t Get(Id id) {

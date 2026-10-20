@@ -144,6 +144,11 @@ namespace Skybox {
 
         if (s_wasInLevel && !inLevel) {
             RestoreExistingMaterial();
+            Materials::Reinitialize();
+
+            for (auto& m : g_materials) m = 0;
+            InterlockedExchange(&g_requested, -1);
+            if (g_selected > 0) InterlockedExchange(&g_requested, g_selected);
         }
         s_wasInLevel = inLevel;
 

@@ -74,15 +74,13 @@ namespace Backtrack {
         const int localTeam = ReadTeam(localPawn);
         const bool teamCheck = (g_teamCheck != 0);
 
-        const int tickLimit = Lagcomp::GetMaxTicks();
-
         for (const auto& e : enemies) {
             if (e.health <= 0) continue;
             if (!e.pawn) continue;
             if (teamCheck && e.team == localTeam) continue;
 
-            auto records = Lagcomp::GetValidRecords(e.pawn);
-            if (records.empty()) continue;
+            const auto snapshots = Lagcomp::GetRenderSnapshots(e.pawn);
+            if (snapshots.empty()) continue;
 
             bool visible = false;
             if (haveEye && e.headPos.Length() > 1.0f) {
@@ -91,14 +89,12 @@ namespace Backtrack {
 
             const ImU32 baseCol = visible ? visCol : occCol;
 
-            const int total = (int)records.size();
+            const int total = (int)snapshots.size();
             int limit = total < kMaxRenderRecords ? total : kMaxRenderRecords;
-            if (tickLimit > 0 && limit > tickLimit) limit = tickLimit;
             if (limit <= 0) continue;
 
             for (int ri = 0; ri < limit; ri++) {
-                auto* r = records[ri];
-                if (!r || !r->valid) continue;
+                const auto& snap = snapshots[ri];
 
                 const float t = (limit > 1)
                     ? (float)ri / (float)(limit - 1)
@@ -109,13 +105,13 @@ namespace Backtrack {
                 for (auto& pair : kPairs) {
                     const int a = pair[0];
                     const int b = pair[1];
-                    if (a >= r->boneCount || b >= r->boneCount) continue;
-                    if (r->bones[a].position.Length() < 1.0f) continue;
-                    if (r->bones[b].position.Length() < 1.0f) continue;
+                    if (a >= snap.boneCount || b >= snap.boneCount) continue;
+                    if (snap.bonePositions[a].Length() < 1.0f) continue;
+                    if (snap.bonePositions[b].Length() < 1.0f) continue;
 
                     Vec3 sa, sb;
-                    if (!CombatShared::WorldToScreen(r->bones[a].position, sa)) continue;
-                    if (!CombatShared::WorldToScreen(r->bones[b].position, sb)) continue;
+                    if (!CombatShared::WorldToScreen(snap.bonePositions[a], sa)) continue;
+                    if (!CombatShared::WorldToScreen(snap.bonePositions[b], sb)) continue;
 
                     dl->AddLine(ImVec2(sa.x, sa.y), ImVec2(sb.x, sb.y), faded, thick);
                 }

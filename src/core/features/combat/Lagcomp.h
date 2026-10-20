@@ -32,6 +32,12 @@ namespace Lagcomp {
         bool isApplied = false;
     };
 
+    struct RenderSnapshot {
+        std::array<Vec3, 22> bonePositions{};
+        int boneCount = 0;
+        int tick = 0;
+    };
+
     bool Initialize();
     void Shutdown();
 
@@ -40,6 +46,7 @@ namespace Lagcomp {
     Record* GetOldestValid(uintptr_t pawn);
     Record* GetOldestWasValid(uintptr_t pawn);
     std::vector<Record*> GetValidRecords(uintptr_t pawn);
+    std::vector<RenderSnapshot> GetRenderSnapshots(uintptr_t pawn);
 
     void Apply(Record& r);
     void Restore(Record& r);
