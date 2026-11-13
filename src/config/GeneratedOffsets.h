@@ -4,15 +4,15 @@
 namespace GeneratedOffsets {
 
     namespace Globals {
-        constexpr uintptr_t dwEntityList = 0x271A908;
-        constexpr uintptr_t dwLocalPlayerController = 0x253CB78;
-        constexpr uintptr_t dwLocalPlayerPawn = 0x2565718;
-        constexpr uintptr_t dwViewMatrix = 0x256B020;
-        constexpr uintptr_t dwGlobalVars = 0x2230090;
-        constexpr uintptr_t dwGameRules = 0x25651D0;
+        constexpr uintptr_t dwEntityList = 0x271EBA8;
+        constexpr uintptr_t dwLocalPlayerController = 0x2541538;
+        constexpr uintptr_t dwLocalPlayerPawn = 0x2569948;
+        constexpr uintptr_t dwViewMatrix = 0x256F250;
+        constexpr uintptr_t dwGlobalVars = 0x2234108;
+        constexpr uintptr_t dwGameRules = 0x25693F8;
         constexpr uintptr_t dwInputSystem = 0x46BC0;
-        constexpr uintptr_t dwCSGOInput = 0x257B640;
-        constexpr uintptr_t dwViewAngles = 0x257BCC8;
+        constexpr uintptr_t dwCSGOInput = 0x257FA10;
+        constexpr uintptr_t dwViewAngles = 0x2580098;
     }
 
     namespace Fields {

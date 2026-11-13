@@ -1,6 +1,7 @@
 #include "pch.h"
 #include "Rage.h"
 #include "NoSpread.h"
+#include "Resolver.h"
 #include "../Penetration.h"
 #include "core/features/combat/CombatShared.h"
 #include "core/features/combat/Lagcomp.h"
@@ -59,24 +60,24 @@ namespace Rage {
 
     static const HitboxScan kScanOrder[] = {
         { HB_HEAD,    0,  100 },
-        { HB_NECK,    1,  90  },
-        { HB_CHEST,   4,  50  },
-        { HB_CHEST,   5,  50  },
-        { HB_CHEST,   6,  50  },
-        { HB_STOMACH, 3,  40  },
-        { HB_PELVIS,  2,  40  },
-        { HB_LEGS,    7,  10  },
-        { HB_LEGS,    8,  10  },
-        { HB_LEGS,    9,  10  },
-        { HB_LEGS,    10, 10  },
-        { HB_LEGS,    11, 10  },
-        { HB_LEGS,    12, 10  },
-        { HB_ARMS,    13, 20  },
-        { HB_ARMS,    14, 20  },
-        { HB_ARMS,    15, 20  },
-        { HB_ARMS,    16, 20  },
-        { HB_ARMS,    17, 20  },
-        { HB_ARMS,    18, 20  },
+        { HB_NECK,    1,  90 },
+        { HB_CHEST,   4,  50 },
+        { HB_CHEST,   5,  50 },
+        { HB_CHEST,   6,  50 },
+        { HB_STOMACH, 3,  40 },
+        { HB_PELVIS,  2,  40 },
+        { HB_LEGS,    7,  10 },
+        { HB_LEGS,    8,  10 },
+        { HB_LEGS,    9,  10 },
+        { HB_LEGS,    10, 10 },
+        { HB_LEGS,    11, 10 },
+        { HB_LEGS,    12, 10 },
+        { HB_ARMS,    13, 20 },
+        { HB_ARMS,    14, 20 },
+        { HB_ARMS,    15, 20 },
+        { HB_ARMS,    16, 20 },
+        { HB_ARMS,    17, 20 },
+        { HB_ARMS,    18, 20 },
     };
 
     static constexpr size_t kScanOrderCount = sizeof(kScanOrder) / sizeof(kScanOrder[0]);
@@ -199,13 +200,6 @@ namespace Rage {
         g_shotsFiredOff = SCHEMA("C_CSPlayerPawn", "m_iShotsFired"_hash);
         g_spreadOff = SCHEMA("CCSWeaponBaseVData", "m_flSpread"_hash);
         g_nextPrimaryTickOff = SCHEMA("C_BasePlayerWeapon", "m_nNextPrimaryAttackTick"_hash);
-
-        printf("[Rage] schema: tickBase=0x%X attrMgr=0x%X attrItem=0x%X itemDef=0x%X recoilIdx=0x%X shotsFired=0x%X spread=0x%X nextPrimary=0x%X wt=0x%X bullets=0x%X\n",
-            g_tickBaseOff, g_attrMgrOff, g_attrItemOff, g_itemDefIdxOff,
-            g_recoilIndexOff, g_shotsFiredOff, g_spreadOff, g_nextPrimaryTickOff,
-            SCHEMA("CCSWeaponBaseVData", "m_WeaponType"_hash),
-            SCHEMA("CCSWeaponBaseVData", "m_nNumBullets"_hash));
-        fflush(stdout);
     }
 
     static void InitializeAccuracyPatterns() {
@@ -214,11 +208,6 @@ namespace Rage {
 
         g_updateAccuracyFn = Memory::FindPattern("client.dll",
             "40 57 41 56 48 83 EC 68 48 8B F9 E8 ? ? ? ? 4C 8B F0 48 85 C0");
-
-        printf("[Rage] accuracy: getInaccuracy=0x%llX updateAccuracy=0x%llX\n",
-            (unsigned long long)g_getInaccuracyFn,
-            (unsigned long long)g_updateAccuracyFn);
-        fflush(stdout);
     }
 
     static float CallGetInaccuracy(uintptr_t weapon) {
@@ -313,9 +302,7 @@ namespace Rage {
         *out = (int)v;
     }
 
-    static void BackupRestoreAccuracy(uintptr_t weapon, bool doUpdateAndRead,
-        float* outInaccuracy)
-    {
+    static void BackupRestoreAccuracy(uintptr_t weapon, bool doUpdateAndRead, float* outInaccuracy) {
         *outInaccuracy = 0.0f;
         if (weapon < 0x10000) return;
 
@@ -327,9 +314,7 @@ namespace Rage {
         if (size == 0 || size > 0x100) return;
 
         uint8_t backup[0x100] = {};
-        __try {
-            memcpy(backup, (const void*)(weapon + begin), size);
-        }
+        __try { memcpy(backup, (const void*)(weapon + begin), size); }
         __except (EXCEPTION_EXECUTE_HANDLER) { return; }
 
         if (doUpdateAndRead) {
@@ -337,9 +322,7 @@ namespace Rage {
             *outInaccuracy = CallGetInaccuracy(weapon);
         }
 
-        __try {
-            memcpy((void*)(weapon + begin), backup, size);
-        }
+        __try { memcpy((void*)(weapon + begin), backup, size); }
         __except (EXCEPTION_EXECUTE_HANDLER) {}
     }
 
@@ -353,9 +336,7 @@ namespace Rage {
         return h;
     }
 
-    static WeaponState BuildWeaponState(uintptr_t localPawn, uint32_t weaponHandle,
-        bool updateAccuracy)
-    {
+    static WeaponState BuildWeaponState(uintptr_t localPawn, uint32_t weaponHandle, bool updateAccuracy) {
         WeaponState ws{};
         if (localPawn < 0x10000 || !weaponHandle) return ws;
 
@@ -429,25 +410,6 @@ namespace Rage {
         return ws;
     }
 
-    static float EstimateDamage(int baseDamage, int hitgroup) {
-        float dmg = (float)baseDamage;
-        switch (hitgroup) {
-        case 1: dmg *= 4.0f; break;
-        case 3: dmg *= 1.25f; break;
-        case 6:
-        case 7: dmg *= 0.75f; break;
-        default: break;
-        }
-        return dmg;
-    }
-
-    static bool RayVsCapsuleLocal(const math::vector3& ray_origin, const math::vector3& ray_dir,
-        const math::vector3& capsule_a, const math::vector3& capsule_b,
-        float radius, float& out_fraction)
-    {
-        return Penetration::RayVsCapsule(ray_origin, ray_dir, capsule_a, capsule_b, radius, out_fraction);
-    }
-
     static math::vector3 MathVec(const Vec3& v) {
         return math::vector3{ v.x, v.y, v.z };
     }
@@ -473,8 +435,6 @@ namespace Rage {
         std::vector<math::vector3> out;
 
         float scale = pointscale / 100.0f;
-        if (scale < 0.0f) scale = 0.0f;
-        if (scale > 1.0f) scale = 1.0f;
         if (scale <= 0.01f) return out;
 
         const math::vector3 hb_mid = (hitbox.mins + hitbox.maxs) * 0.5f;
@@ -490,105 +450,38 @@ namespace Rage {
             if (scale <= 0.01f) return out;
         }
 
-        const math::vector3 shoot_dir = (center - shoot_pos).normalized();
-        const math::vector3 ang = math::helpers::vector_to_angle(shoot_dir);
+        float r = hitbox.radius * scale;
 
-        math::vector3 left{}, up{};
-        math::helpers::angle_vectors_left(ang, nullptr, &left, &up);
-        const math::vector3 right = math::vector3{ -left.x, -left.y, -left.z };
-
-        const auto surface_point = [&](const math::vector3& direction) -> math::vector3 {
-            const math::vector3 dir = direction.normalized();
-
-            if (hitbox.radius > 0.001f) {
-                const float reach = (capsule_b - capsule_a).length() + hitbox.radius * 2.0f + 1.0f;
-                const math::vector3 origin = center + dir * reach;
-                const math::vector3 delta = dir * (reach * -2.0f);
-                float fraction = 1.0f;
-                if (RayVsCapsuleLocal(origin, delta, capsule_a, capsule_b, hitbox.radius, fraction)) {
-                    return origin + delta * fraction;
-                }
+        if (hitbox.radius > 0.001f) {
+            if (hitbox.index == 0) {
+                out.push_back(center);
+                constexpr float rotation = 0.70710678f;
+                out.push_back(center + bone_rot.rotate_vector({ hitbox.maxs.x + (rotation * r), hitbox.maxs.y + (-rotation * r), hitbox.maxs.z }));
+                out.push_back(center + bone_rot.rotate_vector({ hitbox.maxs.x, hitbox.maxs.y, hitbox.maxs.z + r }));
+                out.push_back(center + bone_rot.rotate_vector({ hitbox.maxs.x, hitbox.maxs.y, hitbox.maxs.z - r }));
+                out.push_back(center + bone_rot.rotate_vector({ hitbox.maxs.x, hitbox.maxs.y - r, hitbox.maxs.z }));
+            }
+            else if (hitbox.index == 2 || hitbox.index == 3 || hitbox.index == 4 || hitbox.index == 5 || hitbox.index == 6) {
+                out.push_back(center);
+                out.push_back(center + bone_rot.rotate_vector({ 0, hitbox.maxs.y - r, 0 }));
             }
             else {
-                math::quaternion inverse = bone_rot;
-                inverse.x = -inverse.x;
-                inverse.y = -inverse.y;
-                inverse.z = -inverse.z;
-                const math::vector3 local_dir = inverse.rotate_vector(dir);
-                const math::vector3 extents = (hitbox.maxs - hitbox.mins) * 0.5f;
-                float distance = 8192.0f;
-
-                if (std::fabs(local_dir.x) > 1.0e-6f) distance = (std::min)(distance, std::fabs(extents.x / local_dir.x));
-                if (std::fabs(local_dir.y) > 1.0e-6f) distance = (std::min)(distance, std::fabs(extents.y / local_dir.y));
-                if (std::fabs(local_dir.z) > 1.0e-6f) distance = (std::min)(distance, std::fabs(extents.z / local_dir.z));
-
-                if (distance < 8192.0f) {
-                    return center + dir * distance;
-                }
+                out.push_back(center);
             }
-
-            return center;
-            };
-
-        const auto scaled_surface = [&](const math::vector3& direction) {
-            const math::vector3 surface = surface_point(direction);
-            return center + (surface - center) * scale;
-            };
-
-        switch (hitbox.index) {
-        case 0:
-            out.reserve(4);
-            out.push_back(scaled_surface(right));
-            out.push_back(scaled_surface(-right));
-            out.push_back(scaled_surface(up));
-            out.push_back(scaled_surface(-up));
-            break;
-        case 2:
-        case 3:
-            out.reserve(2);
-            out.push_back(scaled_surface(right));
-            out.push_back(scaled_surface(-right));
-            break;
-        case 4:
-        case 5:
-        case 6:
-            out.reserve(3);
-            out.push_back(scaled_surface(right));
-            out.push_back(scaled_surface(-right));
-            if (hitbox.index == 6) out.push_back(scaled_surface(up));
-            break;
-        case 7:
-        case 8:
-        case 9:
-        case 10:
-        case 11:
-        case 12:
-            out.reserve(2);
-            out.push_back(capsule_a);
-            out.push_back(capsule_b);
-            break;
-        case 13:
-        case 14:
-        case 15:
-        case 16:
-        case 17:
-        case 18:
-            out.reserve(1);
-            out.push_back(capsule_b);
-            break;
-        default:
-            out.reserve(2);
-            out.push_back(scaled_surface(right));
-            out.push_back(scaled_surface(-right));
-            break;
+        }
+        else {
+            out.push_back(center);
+            if (hitbox.index == 7 || hitbox.index == 8) {
+                float d1 = (hitbox.mins.z - center.z) * 0.875f;
+                if (hitbox.index == 8) d1 *= -1.f;
+                out.push_back({ center.x, center.y, center.z + d1 });
+            }
         }
 
         return out;
     }
 
-    static bool RayHitsSphere(const math::vector3& origin, const math::vector3& dir,
-        const math::vector3& center, float radius)
-    {
+    static bool RayHitsSphere(const math::vector3& origin, const math::vector3& dir, const math::vector3& center, float radius) {
         const math::vector3 oc = origin - center;
         const float b = oc.dot(dir);
         const float c = oc.dot(oc) - radius * radius;
@@ -596,11 +489,7 @@ namespace Rage {
         return disc >= 0.0f;
     }
 
-    static float CalculateHitchance(const Vec3& shootPos, const math::vector3& aimAngle,
-        const Vec3& bonePos, float radius,
-        float inaccuracy, float spread, float recoilIndex,
-        int itemDefIdx, int numBullets)
-    {
+    static float CalculateHitchance(const Vec3& shootPos, const math::vector3& aimAngle, const Vec3& bonePos, float radius, float inaccuracy, float spread, float recoilIndex, int itemDefIdx, int numBullets) {
         const float total = inaccuracy + spread;
         if (total < 0.0005f) return 1.0f;
         if (!NoSpread::IsReady()) return 1.0f;
@@ -615,9 +504,7 @@ namespace Rage {
 
         int hits = 0;
         for (int i = 0; i < kSamples; i++) {
-            const math::vector2 spr = NoSpread::CalculateSpread(
-                (uint32_t)i, itemDefIdx, numBullets, inaccuracy, spread, recoilIndex);
-
+            const math::vector2 spr = NoSpread::CalculateSpread((uint32_t)i, itemDefIdx, numBullets, inaccuracy, spread, recoilIndex);
             const math::vector3 dir = (forward + left * spr.x + up * spr.y).normalized();
             if (RayHitsSphere(origin, dir, center, radius)) hits++;
         }
@@ -654,9 +541,7 @@ namespace Rage {
         Lagcomp::Record* record;
     };
 
-    static void BuildViews(const CombatShared::Enemy& e, bool backtrackAllowed,
-        ScanView* views, int& outCount)
-    {
+    static void BuildViews(const CombatShared::Enemy& e, bool backtrackAllowed, ScanView* views, int& outCount) {
         outCount = 0;
 
         if (backtrackAllowed) {
@@ -701,10 +586,7 @@ namespace Rage {
         return nullptr;
     }
 
-    static void ScanEnemy(uintptr_t localPawn, const WeaponState& ws,
-        const Vec3& eye, const Vec3& curAngles, const WeaponSettings& cfg,
-        const CombatShared::Enemy& e, std::vector<ScanHit>& out)
-    {
+    static void ScanEnemy(uintptr_t localPawn, const WeaponState& ws, const Vec3& eye, const Vec3& curAngles, const WeaponSettings& cfg, const CombatShared::Enemy& e, std::vector<ScanHit>& out) {
         const int localTeam = ReadTeam(localPawn);
         if ((int)cfg.teamCheck && e.team == localTeam) return;
 
@@ -770,11 +652,18 @@ namespace Rage {
         BuildViews(e, cfg.backtrack != 0, views, viewCount);
         if (viewCount == 0) return;
 
+        static int side = 1;
+        Resolver::DetectSide(e.pawn, &side);
+
         for (int vi = 0; vi < viewCount; vi++) {
             const ScanView& v = views[vi];
             bool anyDirectHit = false;
 
             std::array<bool, 20> center_sufficient{};
+
+            if (v.record) {
+                Resolver::ResolveAngles(e.pawn, v.record, 0, &side);
+            }
 
             for (size_t si = 0; si < kScanOrderCount; si++) {
                 if (anyDirectHit) break;
@@ -802,8 +691,7 @@ namespace Rage {
                 points.push_back(center);
 
                 if (pointscale > 0.5f) {
-                    auto mps = GenerateMultipoints(*hb, center, boneRot, pointscale, eyeM,
-                        ws.inaccuracy, ws.spread);
+                    auto mps = GenerateMultipoints(*hb, center, boneRot, pointscale, eyeM, ws.inaccuracy, ws.spread);
                     for (const auto& mp : mps) {
                         bool dup = false;
                         for (const auto& p : points) {
@@ -813,12 +701,10 @@ namespace Rage {
                     }
                 }
 
-                const bool centerSufficient = (hb->index >= 0 && hb->index < 20)
-                    ? center_sufficient[hb->index] : false;
+                const bool centerSufficient = (hb->index >= 0 && hb->index < 20) ? center_sufficient[hb->index] : false;
 
                 for (size_t pi = 0; pi < points.size(); pi++) {
                     const bool isCenter = (pi == 0);
-
                     if (!isCenter && centerSufficient) continue;
 
                     const math::vector3& pt = points[pi];
@@ -836,9 +722,7 @@ namespace Rage {
                     auto filter = Tracing::MakeFilter(localPawn, 0x1c3003, 4);
                     auto result = Tracing::Trace(eyeM, pt, filter);
 
-                    const bool visible =
-                        (result.fraction >= 0.97f) ||
-                        (result.hitEntity == e.pawn);
+                    const bool visible = (result.fraction >= 0.97f) || (result.hitEntity == e.pawn);
 
                     if (visible) {
                         finalDmg = Penetration::GetMaxDamage(hitgroup, targetArmor, hasHelmet, targetTeam);
@@ -852,10 +736,7 @@ namespace Rage {
 
                         if (awOk) {
                             const bool isHeadHitbox = (hb->index == 0);
-
-                            if (isHeadHitbox && penResult.hitgroup != 1) {
-                                continue;
-                            }
+                            if (isHeadHitbox && penResult.hitgroup != 1) continue;
 
                             finalDmg = penResult.damage;
                             finalHitgroup = penResult.hitgroup;
@@ -892,11 +773,9 @@ namespace Rage {
                     if (isCenter && hb->index >= 0 && hb->index < 20) {
                         center_sufficient[hb->index] = !penetrated || finalDmg >= (float)e.health;
                     }
-
                     break;
                 }
             }
-
             if (anyDirectHit) break;
         }
     }
@@ -940,10 +819,7 @@ namespace Rage {
 
                 if (ws.valid && (ws.inaccuracy > 0.0005f || ws.spread > 0.0005f)) {
                     const float radius = (h.hitboxIndex == 0) ? 4.0f : 6.0f;
-                    best.hitchance = CalculateHitchance(
-                        eye, h.aimAngle, h.bonePos, radius,
-                        ws.inaccuracy, ws.spread, ws.recoilIndex,
-                        ws.itemDefIdx, ws.numBullets);
+                    best.hitchance = CalculateHitchance(eye, h.aimAngle, h.bonePos, radius, ws.inaccuracy, ws.spread, ws.recoilIndex, ws.itemDefIdx, ws.numBullets);
                 }
             }
         }
@@ -956,7 +832,6 @@ namespace Rage {
         if (!cmd) return;
 
         const bool wasAttacking = g_rageAttackWritten.load();
-
         g_autowallCallsThisTick = 0;
 
         if (Renderer::IsMenuOpen() || !IsGameFocused()) {
@@ -999,7 +874,6 @@ namespace Rage {
         }
 
         WeaponState ws = GetWeaponState(localPawn, false);
-
         if (!ws.valid) {
             if (wasAttacking) {
                 cmd->buttons.value &= ~1ull;
@@ -1055,16 +929,13 @@ namespace Rage {
 
         if (canFire && cfg.noSpread != 0) {
             WeaponState wsAcc = GetWeaponStateWithAccuracy(localPawn, tickBase);
-
             if (wsAcc.valid && tickBase > 0) {
                 const float recoil = wsAcc.recoilIndex > 0.01f ? wsAcc.recoilIndex : (float)wsAcc.shotsFired;
 
                 if (recoil > 0.5f || wsAcc.inaccuracy > 0.001f || wsAcc.spread > 0.001f) {
                     const math::vector3 corrected = NoSpread::Correct(
-                        writeAngle, tickBase + 1,
-                        wsAcc.itemDefIdx, wsAcc.numBullets,
+                        writeAngle, tickBase + 1, wsAcc.itemDefIdx, wsAcc.numBullets,
                         wsAcc.inaccuracy, wsAcc.spread, recoil);
-
                     if (corrected.x != 0.0f || corrected.y != 0.0f || corrected.z != 0.0f) {
                         writeAngle = corrected;
                     }
@@ -1090,12 +961,10 @@ namespace Rage {
 
         if (best.valid) {
             const int32_t renderTick = best.record ? (best.tick + 1) : 0;
-
             const int historySize = cmd->pb.input_history.current_size;
             for (int i = 0; i < historySize; ++i) {
                 auto* entry = GetInputHistoryEntry(cmd, i);
                 if (!entry) continue;
-
                 uintptr_t rawVa = reinterpret_cast<uintptr_t>(entry->m_view_angles);
                 if (rawVa >= 0x10000) {
                     auto* va = reinterpret_cast<proto::msg_qangle*>(rawVa + 0x10);
@@ -1103,16 +972,12 @@ namespace Rage {
                     va->set_y(writeAngle.y);
                     va->set_z(writeAngle.z);
                 }
-
                 if (renderTick > 0) {
                     entry->m_render_tick_count = renderTick;
                     entry->m_render_tick_fraction = 0.0f;
                 }
             }
-
-            if (!silent) {
-                WriteClientViewAngles(writeAngle);
-            }
+            if (!silent) WriteClientViewAngles(writeAngle);
         }
 
         if (canFire) {
@@ -1125,7 +990,6 @@ namespace Rage {
                 cmd->pb.has_bits.bits |= (1u << 6);
                 cmd->pb.attack1_start_history_index = historySize - 1;
             }
-
             g_rageAttackWritten.store(true);
         }
         else if (wasAttacking) {

@@ -1,12 +1,12 @@
 // Generated using https://github.com/a2x/cs2-dumper
-// 2026-10-20 21:13:35.883776400 UTC
+// 2026-11-04 21:17:53.060953800 UTC
 
 #![allow(non_upper_case_globals, non_camel_case_types, non_snake_case, unused)]
 
 pub mod cs2_dumper {
     pub mod schemas {
         // Module: resourcesystem.dll
-        // Class count: 62
+        // Class count: 61
         // Enum count: 5
         pub mod resourcesystem_dll {
             // Alignment: 4
@@ -361,13 +361,6 @@ pub mod cs2_dumper {
             // Metadata:
             // MResourceTypeForInfoType
             pub mod InfoForResourceTypeCCompositeMaterialKit {
-            }
-            // Parent: None
-            // Field count: 0
-            //
-            // Metadata:
-            // MResourceTypeForInfoType
-            pub mod InfoForResourceTypeCVMixListResource {
             }
             // Parent: None
             // Field count: 0

@@ -193,6 +193,7 @@
     <ClCompile Include="src\core\features\combat\Penetration.cpp" />
     <ClCompile Include="src\core\features\combat\rage\NoSpread.cpp" />
     <ClCompile Include="src\core\features\combat\rage\Rage.cpp" />
+    <ClCompile Include="src\core\features\combat\rage\Resolver.cpp" />
     <ClCompile Include="src\core\features\visuals\backtrack\Backtrack.cpp" />
     <ClCompile Include="src\core\features\visuals\bombtimer\BombTimer.cpp" />
     <ClCompile Include="src\config\OffsetConfig.cpp" />
@@ -291,6 +292,7 @@
     <ClInclude Include="src\core\features\combat\Penetration.h" />
     <ClInclude Include="src\core\features\combat\rage\NoSpread.h" />
     <ClInclude Include="src\core\features\combat\rage\Rage.h" />
+    <ClInclude Include="src\core\features\combat\rage\Resolver.h" />
     <ClInclude Include="src\core\features\visuals\backtrack\Backtrack.h" />
     <ClInclude Include="src\core\features\visuals\bombtimer\BombTimer.h" />
     <ClInclude Include="src\config\OffsetConfig.h" />
